@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-electron/
+test-results/
+playwright-report/
+tests/e2e/__screens__/
+.cache/
+*.log
+.DS_Store

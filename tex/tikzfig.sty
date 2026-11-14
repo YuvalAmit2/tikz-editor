@@ -1,0 +1,86 @@
+% tikzfig.sty -- insert figures made with TikZ Editor.
+%
+%   \tikzfig{name}                    graphics/name.tikz at the size it was drawn
+%   \tikzfig[5cm]{name}               5cm wide        (same as width=5cm)
+%   \tikzfig[0.4]{name}               0.4\linewidth wide (a bare number is a
+%                                     fraction of \linewidth)
+%   \tikzfig[width=0.5\linewidth]{name}
+%   \tikzfig[height=3cm]{name}
+%   \tikzfig[scale=1.5]{name}
+%   \tikzfig[dir=figures/]{name}      look in another folder
+%
+% Sizes scale the drawing only: labels keep the document's font size and
+% lines keep their thickness. width/height measure the drawing without its
+% labels, so labels that stick out can make the figure a little larger.
+% With both width and height, the figure fits inside both.
+%
+% Change the default folder with \renewcommand\tikzfigdir{figures/}.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{tikzfig}[2026/11/14 TikZ Editor figures]
+\RequirePackage{tikz}
+
+\newcommand\tikzfigdir{graphics/}
+
+\pgfkeys{
+  /tikzfig/.is family, /tikzfig/.cd,
+  width/.store in=\tikzfig@width,
+  height/.store in=\tikzfig@height,
+  scale/.store in=\tikzfig@scale,
+  dir/.store in=\tikzfig@dir,
+}
+
+\ExplSyntaxOn
+% An option without "=" is a width; a bare number is a fraction of \linewidth.
+\cs_new_protected:Npn \tikzfig@options #1
+  {
+    \tl_if_blank:nF {#1}
+      {
+        \tl_if_in:nnTF {#1} {=}
+          { \pgfkeys{/tikzfig/.cd,#1} }
+          {
+            \regex_match:nnTF { \A \s* [+\-]? (\d+\.?\d* | \.\d+) \s* \Z } {#1}
+              { \def\tikzfig@width{#1\linewidth} }
+              { \def\tikzfig@width{#1} }
+          }
+      }
+  }
+\ExplSyntaxOff
+
+\NewDocumentCommand\tikzfig{O{}m}{%
+  \begingroup
+  \def\tikzfig@width{}\def\tikzfig@height{}\def\tikzfig@scale{1}%
+  \let\tikzfig@dir\tikzfigdir
+  \tikzfig@options{#1}%
+  % No end-of-line spaces from the .tikz file around the picture
+  \endlinechar=-1\relax
+  \input{\tikzfig@dir#2.tikz}%
+  \endgroup
+}
+
+% #1, #2: natural width and height of the drawing in cm (written by the editor).
+\newdimen\tikzfig@dim
+\newenvironment{tikzfigure}[2]{%
+  \def\tikzfig@s{\tikzfig@scale}%
+  \ifx\tikzfig@width\@empty\else
+    \ifdim#1pt>0.001pt
+      \setlength\tikzfig@dim{\tikzfig@width}%
+      \pgfmathsetmacro\tikzfig@s{\tikzfig@scale*\strip@pt\tikzfig@dim/(#1*28.45274)}%
+    \fi
+  \fi
+  \ifx\tikzfig@height\@empty\else
+    \ifdim#2pt>0.001pt
+      \setlength\tikzfig@dim{\tikzfig@height}%
+      \pgfmathsetmacro\tikzfig@t{\tikzfig@scale*\strip@pt\tikzfig@dim/(#2*28.45274)}%
+      \ifx\tikzfig@width\@empty
+        \let\tikzfig@s\tikzfig@t
+      \else
+        \pgfmathsetmacro\tikzfig@s{min(\tikzfig@s,\tikzfig@t)}%
+      \fi
+    \fi
+  \fi
+  \begin{tikzpicture}[x=\tikzfig@s cm,y=\tikzfig@s cm]%
+}{%
+  \end{tikzpicture}%
+}
+
+\endinput

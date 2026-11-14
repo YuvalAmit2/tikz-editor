@@ -1,0 +1,168 @@
+import { applyProps, applyStyle, deleteSelection } from "../actions";
+import { ANCHORS, LINE_WIDTHS, type Anchor, type FontSize, type Obj, type Style } from "../model/types";
+import { PALETTE, TINTS, xcolorCss } from "../model/xcolor";
+import { store, useStore } from "../store";
+
+/** "blue!30" -> ["blue", 30]; "green!60!black" -> ["green!60!black", 100] */
+function splitTint(c: string | null): [string | null, number] {
+  if (!c) return [null, 100];
+  for (const base of PALETTE) {
+    if (c === base) return [base, 100];
+    const m = c.match(new RegExp(`^${base.replace(/[!]/g, "\\!")}!(\\d+)$`));
+    if (m) return [base, parseInt(m[1])];
+  }
+  return [c, 100];
+}
+const withTint = (base: string, tint: number) => (tint >= 100 ? base : `${base}!${tint}`);
+
+function Swatches({ value, onPick, allowNone, testid }: { value: string | null; onPick: (c: string | null) => void; allowNone?: boolean; testid: string }) {
+  return (
+    <div className="swatches" data-testid={testid}>
+      {allowNone && (
+        <button className={"swatch none" + (value === null ? " active" : "")} title="None" onClick={() => onPick(null)}>
+          <svg width="18" height="18"><path d="M3 15L15 3" stroke="#d33" strokeWidth="1.5" /></svg>
+        </button>
+      )}
+      {PALETTE.map((c) => (
+        <button key={c} className={"swatch" + (value === c ? " active" : "")} title={c} onClick={() => onPick(c)}>
+          <span style={{ background: xcolorCss(c) }} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Seg<T extends string | number | boolean>({ options, value, onPick }: { options: { v: T; label: React.ReactNode; title?: string }[]; value: T | undefined; onPick: (v: T) => void }) {
+  return (
+    <div className="seg">
+      {options.map((o) => (
+        <button key={String(o.v)} title={o.title} className={value === o.v ? "active" : ""} onClick={() => onPick(o.v)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function StylePanel() {
+  const sel = useStore((s) => s.selection);
+  const scene = useStore((s) => s.scene);
+  const current = useStore((s) => s.style);
+  const objs = scene.objects.filter((o) => sel.includes(o.id));
+  // Show the style of the first selected object, or the style for new objects.
+  const st: Style = objs[0]?.style ?? current;
+  const types = new Set(objs.map((o) => o.type));
+  const onlyLabels = objs.length > 0 && [...types].every((t) => t === "label");
+  const onlyPoints = objs.length > 0 && [...types].every((t) => t === "point");
+  const hasOpen = objs.length === 0 || objs.some((o) => o.type === "path" && !o.closed);
+  const hasFillable = objs.length === 0 || objs.some((o) => (o.type === "path" && o.closed) || o.type === "ellipse");
+  const labels = objs.filter((o): o is Extract<Obj, { type: "label" }> => o.type === "label");
+  const points = objs.filter((o): o is Extract<Obj, { type: "point" }> => o.type === "point");
+  const [fillBase, fillTint] = splitTint(st.fill);
+
+  return (
+    <aside className="panel" data-testid="style-panel">
+      <div className="panel-title">{objs.length === 0 ? "New objects" : objs.length === 1 ? cap(objs[0].type === "path" ? (objs[0].closed ? "polygon" : "line") : objs[0].type) : `${objs.length} objects`}</div>
+
+      <section>
+        <h4>{onlyLabels ? "Text colour" : onlyPoints ? "Colour" : "Stroke"}</h4>
+        <Swatches testid="stroke-swatches" value={st.stroke} allowNone={!onlyLabels && !onlyPoints} onPick={(c) => applyStyle({ stroke: c })} />
+      </section>
+
+      {!onlyLabels && !onlyPoints && (
+        <>
+          <section>
+            <h4>Thickness</h4>
+            <div className="widths">
+              {LINE_WIDTHS.map((w, i) => (
+                <button key={w.name} className={Math.abs(st.width - w.pt) < 1e-9 ? "active" : ""} title={`${w.name} (${w.pt}pt) — key ${i + 1}`} onClick={() => applyStyle({ width: w.pt })}>
+                  <svg width="30" height="16"><line x1="3" x2="27" y1="8" y2="8" stroke="currentColor" strokeWidth={Math.max(0.6, w.pt * 2.2)} /></svg>
+                </button>
+              ))}
+            </div>
+          </section>
+          <section>
+            <h4>Dash</h4>
+            <Seg
+              value={st.dash}
+              onPick={(dash) => applyStyle({ dash })}
+              options={[
+                { v: "solid", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" /></svg>, title: "solid" },
+                { v: "dashed", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="5 4" /></svg>, title: "dashed" },
+                { v: "dotted", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="1.5 3" strokeLinecap="round" /></svg>, title: "dotted" },
+              ]}
+            />
+          </section>
+        </>
+      )}
+
+      {hasFillable && !onlyLabels && !onlyPoints && (
+        <section>
+          <h4>Fill</h4>
+          <Swatches testid="fill-swatches" value={fillBase} allowNone onPick={(c) => applyStyle({ fill: c ? withTint(c, fillBase ? fillTint : 15) : null })} />
+          {fillBase && (
+            <Seg value={fillTint} onPick={(t) => applyStyle({ fill: withTint(fillBase, t) })} options={TINTS.map((t) => ({ v: t, label: `${t}%`, title: `${fillBase}!${t}` }))} />
+          )}
+        </section>
+      )}
+
+      {hasOpen && !onlyLabels && !onlyPoints && (
+        <section>
+          <h4>Arrowheads</h4>
+          <Seg
+            value={`${st.arrowStart ? "<" : ""}-${st.arrowEnd ? ">" : ""}`}
+            onPick={(v) => applyStyle({ arrowStart: v.startsWith("<"), arrowEnd: v.endsWith(">") })}
+            options={[
+              { v: "-", label: "—" },
+              { v: "->", label: "→" },
+              { v: "<-", label: "←" },
+              { v: "<->", label: "↔" },
+            ]}
+          />
+        </section>
+      )}
+
+      {points.length > 0 && (
+        <section>
+          <h4>Dot size</h4>
+          <Seg value={points[0].size} onPick={(size) => applyProps({ size } as Partial<Obj>, (o) => o.type === "point")} options={[1, 1.5, 2, 3].map((v) => ({ v, label: `${v}pt` }))} />
+        </section>
+      )}
+
+      {labels.length > 0 && (
+        <>
+          <section>
+            <h4>Size</h4>
+            <Seg
+              value={labels[0].font}
+              onPick={(font) => applyProps({ font } as Partial<Obj>, (o) => o.type === "label")}
+              options={(["\\scriptsize", "\\footnotesize", "\\small", "", "\\large"] as FontSize[]).map((f) => ({ v: f, label: f ? f.replace("\\", "").replace("footnotesize", "fnsize").replace("scriptsize", "script") : "normal", title: f || "\\normalsize" }))}
+            />
+          </section>
+          <section>
+            <h4>Anchor</h4>
+            <div className="anchors" title="Which point of the label sits at its position">
+              {ANCHORS.map((a) => (
+                <button key={a} className={labels[0].anchor === a ? "active" : ""} title={a} onClick={() => applyProps({ anchor: a as Anchor } as Partial<Obj>, (o) => o.type === "label")}>
+                  <span />
+                </button>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      {objs.length > 0 && (
+        <section>
+          <button className="text-btn danger" onClick={deleteSelection}>
+            Delete
+          </button>
+        </section>
+      )}
+      {objs.length === 0 && <p className="muted small">Nothing selected: these settings apply to the next objects you draw.</p>}
+      <span hidden>{store.get().tool}</span>
+    </aside>
+  );
+}
+
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
