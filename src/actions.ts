@@ -5,6 +5,7 @@ import { scalingAbout, rotationAbout, transformObj, translation, unionBox, geomB
 import type { Settings } from "./model/settings";
 import { emptyScene, newId, type Dash, type LabelObj, type Obj, type Style } from "./model/types";
 import { placeLabel } from "./model/labelPlace";
+import { componentAt, components, componentStyles, withPartStyle } from "./model/parts";
 import { sceneToTikz, tikzToScene } from "./tikz/export";
 import { cancelDraft, selectionBox } from "./tools/controller";
 import { askText, store, TRUE_ZOOM, type ToolName } from "./store";
@@ -19,12 +20,27 @@ export function setTool(tool: ToolName) {
 export function applyStyle(patch: Partial<Style>, extra: Partial<Obj> = {}) {
   const s = store.get();
   const sel = store.selected();
+  // Pieces picked in the panel: only their stroke changes.
+  const ps = activePieces();
+  if (ps) {
+    const o = sel[0];
+    const parts = withPartStyle(o, s.scene.objects, ps, patch);
+    store.commit(store.withReplaced([{ ...o, parts: parts.length ? parts : undefined } as Obj]));
+    return;
+  }
   // Labels have no fill; their colour shouldn't turn the next shape's fill off.
   const forNew = sel.length > 0 && sel.every((o) => o.type === "label") ? { stroke: patch.stroke ?? s.style.stroke } : patch;
   store.set({ style: { ...s.style, ...(sel.length ? forNew : patch) } });
   if (sel.length === 0) return;
   const changed = sel.map((o) => ({ ...o, ...extra, style: { ...o.style, ...patch } }) as Obj);
   store.commit(store.withReplaced(changed));
+}
+
+/** The pieces picked in the panel, when they belong to the one selected object. */
+export function activePieces(): number[] | null {
+  const s = store.get();
+  const p = s.pieceSel;
+  return p && p.ats.length && s.selection.length === 1 && s.selection[0] === p.id ? p.ats : null;
 }
 
 /** Change non-style properties (label anchor, font, text mode, point size). */
@@ -256,7 +272,13 @@ export function align(how: "left" | "hcenter" | "right" | "top" | "vcenter" | "b
 /** "-" / ".": dashed or dotted, pressed again: solid. */
 export function toggleDash(d: Dash) {
   const sel = store.selected();
-  const cur = (sel[0] ?? null)?.style.dash ?? store.get().style.dash;
+  let cur = (sel[0] ?? null)?.style.dash ?? store.get().style.dash;
+  const ps = activePieces();
+  if (ps) {
+    // The first picked piece's dash
+    const { chain, comps } = components(sel[0], store.get().scene.objects);
+    if (chain) cur = componentStyles(sel[0], comps, chain.pieces.length)[componentAt(comps, ps[0], chain.pieces.length)]?.dash ?? cur;
+  }
   applyStyle({ dash: cur === d ? "solid" : d });
 }
 

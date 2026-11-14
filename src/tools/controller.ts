@@ -996,7 +996,9 @@ function insertNode(o: PathObj | CurveObj, p: Vec, exact = false) {
     });
     if (best < 0) return;
     const pts = [...o.pts.slice(0, best + 1), exact ? p : q, ...o.pts.slice(best + 1)];
-    store.commit(store.withReplaced([{ ...o, pts }]), { activeNode: best + 1 });
+    const [a, b] = segs[best];
+    const t = dist(a, exact ? p : q) / (dist(a, b) || 1);
+    store.commit(store.withReplaced([{ ...o, pts, ...remapParts(o, (s) => splitParam(s, best, t)) }]), { activeNode: best + 1 });
     return;
   }
   const per = 24;
@@ -1015,7 +1017,28 @@ function insertNode(o: PathObj | CurveObj, p: Vec, exact = false) {
   }
   const seg = Math.floor(bi / per);
   const nodes = [...o.nodes.slice(0, seg + 1), { p: exact ? p : q, mode: "smooth" as const }, ...o.nodes.slice(seg + 1)];
-  store.commit(store.withReplaced([{ ...o, nodes }]), { activeNode: seg + 1 });
+  const t = (bi % per + 0.5) / per;
+  store.commit(store.withReplaced([{ ...o, nodes, ...remapParts(o, (s) => splitParam(s, seg, t)) }]), { activeNode: seg + 1 });
+}
+
+// Styled pieces are named by a chain parameter (piece index + t); keep them
+// on the same spot when a point is added or removed.
+function remapParts(o: Obj, f: (s: number) => number): { parts?: Obj["parts"] } {
+  return o.parts?.length ? { parts: o.parts.map((p) => ({ ...p, at: f(p.at) })) } : {};
+}
+/** Piece k split at t into pieces k and k+1. */
+function splitParam(s: number, k: number, t: number): number {
+  if (s < k) return s;
+  if (s >= k + 1) return s + 1;
+  const u = s - k;
+  return u < t ? k + u / t : k + 1 + (u - t) / (1 - t);
+}
+/** Point j removed: pieces j-1 and j become one. */
+function joinParam(s: number, j: number): number {
+  if (j === 0) return Math.max(0, s - 1);
+  if (s < j - 1) return s;
+  if (s < j + 1) return j - 1 + (s - (j - 1)) / 2;
+  return s - 1;
 }
 
 /** Backspace while editing points: delete the active anchor/vertex. */
@@ -1027,12 +1050,12 @@ export function deleteActiveNode(): boolean {
   const j = s.activeNode;
   if (o.type === "path") {
     if (o.pts.length <= (o.closed ? 3 : 2) || !o.pts[j]) return true;
-    store.commit(store.withReplaced([{ ...o, pts: o.pts.filter((_, i) => i !== j) }]), { activeNode: null });
+    store.commit(store.withReplaced([{ ...o, pts: o.pts.filter((_, i) => i !== j), ...remapParts(o, (s) => joinParam(s, j)) }]), { activeNode: null });
     return true;
   }
   if (o.type === "curve") {
     if (o.nodes.length <= (o.closed ? 3 : 2) || !o.nodes[j]) return true;
-    store.commit(store.withReplaced([{ ...o, nodes: o.nodes.filter((_, i) => i !== j) }]), { activeNode: null });
+    store.commit(store.withReplaced([{ ...o, nodes: o.nodes.filter((_, i) => i !== j), ...remapParts(o, (s) => joinParam(s, j)) }]), { activeNode: null });
     return true;
   }
   return false;

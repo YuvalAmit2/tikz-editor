@@ -5,6 +5,7 @@ import { ptToCm, sub, len, type Box } from "../model/geometry";
 import type { Obj, Style, Vec } from "../model/types";
 import { xcolorCss } from "../model/xcolor";
 import { curvePathD, curveSegments } from "../model/curve";
+import { componentPieces, piecesSvgD, styledRuns } from "../model/parts";
 import {
   editTargets,
   getHandles,
@@ -112,6 +113,7 @@ export function Canvas() {
             .map((o) => (
               <Highlight key={"hl" + o.id} o={o} z={z} />
             ))}
+          <PieceHighlights z={z} />
         </g>
         <SelectionOverlay toScreen={toScreen} multi={s.selection.length > 1} />
         {s.marquee && <MarqueeRect b={s.marquee} toScreen={toScreen} />}
@@ -167,6 +169,37 @@ function ArrowTip({ tip, from, st, z }: { tip: Vec; from: Vec; st: Style; z: num
 }
 
 function ObjView({ o, z }: { o: Obj; z: number }) {
+  if (o.parts?.length && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) return <PartedView o={o} z={z} />;
+  return <PlainObjView o={o} z={z} />;
+}
+
+/** An object some of whose pieces have their own stroke: the fill, then each
+ *  stretch with its own look, then the arrowheads. */
+function PartedView({ o, z }: { o: Obj; z: number }) {
+  const objects = useStore((s) => s.scene.objects);
+  const runs = styledRuns(o, objects);
+  if (!runs) return <PlainObjView o={o} z={z} />;
+  const firstRun = runs.find((r) => r.first);
+  const lastRun = runs.find((r) => r.last);
+  const p0 = firstRun?.pieces[0];
+  const pn = lastRun?.pieces[lastRun.pieces.length - 1];
+  const dirFrom = (p: NonNullable<typeof p0>, end: boolean) => {
+    const at = end ? p.b : p.a;
+    return (end ? [p.c2, p.c1, p.a] : [p.c1, p.c2, p.b]).find((c) => Math.hypot(c.x - at.x, c.y - at.y) > 1e-6) ?? (end ? p.a : p.b);
+  };
+  return (
+    <g data-id={o.id}>
+      {o.style.fill && <PlainObjView o={{ ...o, style: { ...o.style, stroke: null } } as Obj} z={z} />}
+      {runs.map((r, i) => (
+        <path key={i} d={piecesSvgD(r.pieces)} {...strokeProps(r.style, z)} fill="none" />
+      ))}
+      {o.style.arrowEnd && pn && lastRun!.style.stroke && <ArrowTip tip={pn.b} from={dirFrom(pn, true)} st={lastRun!.style} z={z} />}
+      {o.style.arrowStart && p0 && firstRun!.style.stroke && <ArrowTip tip={p0.a} from={dirFrom(p0, false)} st={firstRun!.style} z={z} />}
+    </g>
+  );
+}
+
+function PlainObjView({ o, z }: { o: Obj; z: number }) {
   switch (o.type) {
     case "path": {
       const d = o.pts.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ") + (o.closed ? " Z" : "");
@@ -278,6 +311,23 @@ function Highlight({ o, z }: { o: Obj; z: number }) {
       return <rect x={b.minX} y={b.minY} width={b.maxX - b.minX} height={b.maxY - b.minY} fill="none" stroke={SEL} strokeWidth={w} opacity={0.7} />;
     }
   }
+}
+
+/** Pieces picked in the panel (blue band) and the one under the mouse there (orange). */
+function PieceHighlights({ z }: { z: number }) {
+  const sel = useStore((s) => s.pieceSel);
+  const hover = useStore((s) => s.pieceHover);
+  const objects = useStore((s) => s.scene.objects);
+  const out: React.ReactElement[] = [];
+  const band = (id: string, at: number, color: string, key: string) => {
+    const o = objects.find((x) => x.id === id);
+    if (!o) return;
+    const d = piecesSvgD(componentPieces(o, objects, at));
+    if (d) out.push(<path key={key} d={d} fill="none" stroke={color} strokeWidth={6 / z} strokeLinecap="round" opacity={0.35} pointerEvents="none" data-testid="piece-highlight" />);
+  };
+  sel?.ats.forEach((at, i) => band(sel.id, at, SEL, "s" + i));
+  if (hover) band(hover.id, hover.at, "#e8590c", "h");
+  return <>{out}</>;
 }
 
 // ---------------------------------------------------------------- overlays

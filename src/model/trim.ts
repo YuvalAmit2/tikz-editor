@@ -84,7 +84,7 @@ function subPiece(p: Piece, t0: number, t1: number): Piece {
 }
 
 /** Pieces of the chain from s0 to s1 (s1 may pass the end of a closed chain). */
-function subChain(c: Chain, s0: number, s1: number): Piece[] {
+export function subChain(c: Chain, s0: number, s1: number): Piece[] {
   const n = c.pieces.length;
   const out: Piece[] = [];
   let s = s0;

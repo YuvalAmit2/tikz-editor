@@ -1,6 +1,8 @@
 import { applyProps, applyStyle, deleteSelection, saveSettings, smartLabel } from "../actions";
 import { saveSelectionToLibrary } from "../library";
+import { useState } from "react";
 import { FONT_SIZES, LINE_WIDTHS, type Obj, type Style } from "../model/types";
+import { componentAt, componentNames, components, componentStyles } from "../model/parts";
 import { PALETTE, TINTS, xcolorCss } from "../model/xcolor";
 import { askText, store, useStore } from "../store";
 
@@ -45,14 +47,90 @@ function Seg<T extends string | number | boolean>({ options, value, onPick }: { 
   );
 }
 
+/** The pieces of an object (between its crossings with other objects), or
+ *  null when it has fewer than two. */
+function piecesOf(o: Obj, objects: Obj[]) {
+  if (o.type !== "path" && o.type !== "curve" && o.type !== "ellipse") return null;
+  const { chain, comps } = components(o, objects);
+  if (!chain || comps.length < 2) return null;
+  const n = chain.pieces.length;
+  const names = componentNames(o, chain, comps);
+  const styles = componentStyles(o, comps, n);
+  const index = (at: number) => componentAt(comps, at, n);
+  return {
+    list: comps.map((c, k) => ({ at: c.mid % n, name: names[k], style: styles[k] })),
+    index,
+    nameAt: (at: number) => names[index(at)] ?? "piece",
+    styleAt: (at: number) => styles[index(at)] ?? o.style,
+  };
+}
+
+let piecesOpen = false;
+
+/** A small, collapsible list of the object's pieces. Picking some makes the
+ *  stroke settings below apply to just those. */
+function PiecesSection({ id, pieces, picked }: { id: string; pieces: NonNullable<ReturnType<typeof piecesOf>>; picked: number[] }) {
+  const [open, setOpen] = useState(piecesOpen);
+  const pickedIdx = new Set(picked.map(pieces.index));
+  const toggle = (at: number) => {
+    const k = pieces.index(at);
+    const next = pickedIdx.has(k) ? picked.filter((a) => pieces.index(a) !== k) : [...picked, at];
+    store.set({ pieceSel: next.length ? { id, ats: next } : null });
+  };
+  return (
+    <section className="pieces">
+      <button
+        className="pieces-head"
+        onClick={() => {
+          piecesOpen = !open;
+          setOpen(!open);
+          if (open) store.set({ pieceSel: null, pieceHover: null });
+        }}
+        data-testid="pieces-toggle"
+        title="The pieces between where other lines cross this one. Pick some to style just them."
+      >
+        <span className={"caret" + (open ? " open" : "")}>▸</span> Pieces <span className="muted">{pieces.list.length}</span>
+      </button>
+      {open && (
+        <div className="piece-list" onMouseLeave={() => store.set({ pieceHover: null })}>
+          {pieces.list.map((p, k) => (
+            <button
+              key={k}
+              className={"piece" + (pickedIdx.has(k) ? " active" : "")}
+              onClick={() => toggle(p.at)}
+              onMouseEnter={() => store.set({ pieceHover: { id, at: p.at } })}
+              data-testid="piece"
+            >
+              <svg width="22" height="10">
+                <line x1="2" x2="20" y1="5" y2="5" stroke={xcolorCss(p.style.stroke) ?? "#bbb"} strokeWidth={Math.max(1, Math.min(3, p.style.width * 2.2))} strokeDasharray={p.style.dash === "dashed" ? "4 3" : p.style.dash === "dotted" ? "1.2 2.4" : undefined} strokeLinecap="round" />
+              </svg>
+              {p.name}
+            </button>
+          ))}
+          {picked.length > 0 && (
+            <button className="piece clear" onClick={() => store.set({ pieceSel: null })} title="Style the whole object again">
+              whole
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function StylePanel() {
   const sel = useStore((s) => s.selection);
   const scene = useStore((s) => s.scene);
   const current = useStore((s) => s.style);
   const tool = useStore((s) => s.tool);
   const objs = scene.objects.filter((o) => sel.includes(o.id));
-  // Show the style of the first selected object, or the style for new objects.
-  const st: Style = objs[0]?.style ?? current;
+  const pieceSel = useStore((s) => s.pieceSel);
+  const pieces = objs.length === 1 ? piecesOf(objs[0], scene.objects) : null;
+  const picked = pieces && pieceSel?.id === objs[0].id ? pieceSel.ats : [];
+  const pieceMode = picked.length > 0;
+  // Show the style of the first selected object (or of the first picked
+  // piece), or the style for new objects.
+  const st: Style = pieceMode ? pieces!.styleAt(picked[0]) : (objs[0]?.style ?? current);
   const types = new Set(objs.map((o) => o.type));
   const onlyLabels = objs.length > 0 && [...types].every((t) => t === "label");
   const onlyPoints = objs.length > 0 && [...types].every((t) => t === "point");
@@ -67,7 +145,12 @@ export function StylePanel() {
 
   return (
     <div data-testid="style-panel">
-      <div className="panel-title">{objs.length === 0 ? "New objects" : objs.length === 1 ? objTitle(objs[0]) : `${objs.length} objects`}</div>
+      <div className="panel-title">
+        {objs.length === 0 ? "New objects" : objs.length === 1 ? objTitle(objs[0]) : `${objs.length} objects`}
+        {pieceMode && <span className="muted"> · {picked.length === 1 ? pieces!.nameAt(picked[0]) : `${picked.length} pieces`}</span>}
+      </div>
+
+      {pieces && <PiecesSection id={objs[0].id} pieces={pieces} picked={picked} />}
 
       <section>
         <h4>{onlyLabels ? "Text colour" : onlyPoints ? "Colour" : "Stroke"}</h4>
@@ -101,7 +184,7 @@ export function StylePanel() {
         </>
       )}
 
-      {hasFillable && !onlyLabels && !onlyPoints && (
+      {hasFillable && !onlyLabels && !onlyPoints && !pieceMode && (
         <section>
           <h4>Fill</h4>
           <Swatches testid="fill-swatches" value={fillBase} allowNone onPick={(c) => applyStyle({ fill: c ? withTint(c, fillBase ? fillTint : 15) : null })} />
@@ -111,7 +194,7 @@ export function StylePanel() {
         </section>
       )}
 
-      {hasOpen && !onlyLabels && !onlyPoints && (
+      {hasOpen && !onlyLabels && !onlyPoints && !pieceMode && (
         <section>
           <h4>Arrowheads</h4>
           <Seg

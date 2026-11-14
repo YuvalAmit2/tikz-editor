@@ -8,6 +8,7 @@
 import { labelBody, labelNodeOpts } from "../labels/mode";
 import { sceneGeomBox } from "../model/geometry";
 import { curveSegments } from "../model/curve";
+import { styledRuns } from "../model/parts";
 import type { Obj, Scene, Style } from "../model/types";
 
 export const SCENE_MARKER = "%tikz-editor-scene ";
@@ -33,7 +34,31 @@ function styleOpts(s: Style, opts: { arrows: boolean }): string[] {
   return o;
 }
 
-function objToTikz(o: Obj): string | null {
+/** An object with styled pieces: its fill, then one \path per stretch. */
+function partedToTikz(o: Obj, others: Obj[]): string | null {
+  const runs = styledRuns(o, others);
+  if (!runs) return null;
+  const lines: string[] = [];
+  if (o.style.fill) {
+    const fillOnly = objToTikz({ ...o, parts: undefined, style: { ...o.style, stroke: null } } as Obj, others);
+    if (fillOnly) lines.push(fillOnly);
+  }
+  for (const r of runs) {
+    const st = { ...r.style, fill: null, arrowStart: r.first && o.style.arrowStart, arrowEnd: r.last && o.style.arrowEnd };
+    const opts = styleOpts(st, { arrows: true });
+    if (!opts.length || !r.pieces.length) continue;
+    let body = coord(r.pieces[0].a);
+    for (const p of r.pieces) body += p.line ? ` -- ${coord(p.b)}` : ` .. controls ${coord(p.c1)} and ${coord(p.c2)} .. ${coord(p.b)}`;
+    lines.push(`\\path[${opts.join(",")}] ${body};`);
+  }
+  return lines.join("\n") || null;
+}
+
+function objToTikz(o: Obj, others: Obj[] = []): string | null {
+  if (o.parts?.length && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) {
+    const t = partedToTikz(o, others);
+    if (t !== null) return t;
+  }
   switch (o.type) {
     case "path": {
       if (o.pts.length < 2) return null;
@@ -86,7 +111,7 @@ export function sceneToTikz(scene: Scene): string {
     `\\begin{tikzfigure}{${fmt(w)}}{${fmt(h)}}`,
   ];
   for (const o of scene.objects) {
-    const t = objToTikz(o);
+    const t = objToTikz(o, scene.objects);
     if (t) lines.push(t);
   }
   lines.push("\\end{tikzfigure}", "");

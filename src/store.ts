@@ -55,6 +55,11 @@ export interface AppState {
   insertHint: { x: number; y: number } | null;
   /** Mouse cursor while over a handle. */
   hoverCursor: string | null;
+  /** Pieces of the selected object picked in the panel (style changes go to
+   *  them only), by a point on each (chain parameter). */
+  pieceSel: { id: string; ats: number[] } | null;
+  /** The piece under the mouse in the panel (highlighted on the canvas). */
+  pieceHover: { id: string; at: number } | null;
 }
 
 type Listener = () => void;
@@ -85,6 +90,8 @@ class Store {
     guideCx: 0,
     insertHint: null,
     hoverCursor: null,
+    pieceSel: null,
+    pieceHover: null,
   };
   private listeners = new Set<Listener>();
   private undoStack: Scene[] = [];
@@ -93,6 +100,7 @@ class Store {
   get = () => this.state;
 
   set(patch: Partial<AppState>) {
+    if (patch.selection && this.state.pieceSel && !(patch.selection.length === 1 && patch.selection[0] === this.state.pieceSel.id) && !("pieceSel" in patch)) patch = { ...patch, pieceSel: null };
     this.state = { ...this.state, ...patch };
     this.listeners.forEach((l) => l());
   }

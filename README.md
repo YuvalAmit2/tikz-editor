@@ -79,6 +79,8 @@ In the text panel: labels are **math by default** (`\cO_K`), but a label contain
 
 **Trim (X):** click a piece of a shape to cut it away up to where it crosses other lines, or drag across several pieces. To cut an ellipse in half, draw a line across it, trim one half, delete the line.
 
+**Pieces:** to style part of a shape (e.g. the hidden half of a sphere's equator dashed), select it and open **Pieces** in the style panel. It lists the stretches between where other lines cross it, named by where they lie ("top", "lower left", …); hovering one highlights it. Pick one or more, and the stroke colour, thickness and dash (including the `-` and `.` keys) apply to just those. **whole** goes back to styling the whole shape. A styled piece follows the crossings when things move.
+
 **Grid snapping** is magnetic per axis: near a grid line, that coordinate sticks to it and the other one stays free, so you can slide along a grid line.
 
 ## Development

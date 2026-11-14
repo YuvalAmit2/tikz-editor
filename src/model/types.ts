@@ -70,6 +70,14 @@ export const FONT_SIZES: FontSize[] = ["\\scriptsize", "\\footnotesize", "\\smal
 interface Base {
   id: string;
   style: Style;
+  /** Pieces drawn differently from the rest (see model/parts.ts): each names
+   *  a piece by a point on it (chain parameter) and overrides its stroke. */
+  parts?: PartStyle[];
+}
+
+export interface PartStyle {
+  at: number;
+  style: Partial<Pick<Style, "stroke" | "width" | "dash">>;
 }
 
 /** Polyline or polygon (closed). Lines and rectangles are paths too. */
