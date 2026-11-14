@@ -1,6 +1,14 @@
 // App settings. Stored as JSON (settings.json in the app's data folder) and
 // editable either in the Settings window or by hand.
 
+import type { Style } from "./types";
+
+/** A named style you can apply with one key (⌥1 … ⌥9, in order). */
+export interface StylePreset {
+  name: string;
+  style: Partial<Style>;
+}
+
 export interface Settings {
   /** After placing an object, switch back to the Select tool. */
   returnToSelect: boolean;
@@ -33,6 +41,9 @@ export interface Settings {
   recognizeShapes: boolean;
   /** Folder of the figure library. Empty: "library" in the app's data folder. */
   libraryDir: string;
+  presets: StylePreset[];
+  /** Tool keys, e.g. { "curve": "B" }; only the ones you change (edit settings.json). */
+  toolKeys: Record<string, string>;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -52,6 +63,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sketchSmoothing: 4,
   recognizeShapes: true,
   libraryDir: "",
+  presets: [],
+  toolKeys: {},
 };
 
 export function withDefaults(s: Partial<Settings> | undefined): Settings {

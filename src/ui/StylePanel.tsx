@@ -2,7 +2,7 @@ import { applyProps, applyStyle, deleteSelection, saveSettings } from "../action
 import { saveSelectionToLibrary } from "../library";
 import { ANCHORS, LINE_WIDTHS, type Anchor, type FontSize, type Obj, type Style } from "../model/types";
 import { PALETTE, TINTS, xcolorCss } from "../model/xcolor";
-import { useStore } from "../store";
+import { askText, useStore } from "../store";
 
 /** "blue!30" -> ["blue", 30]; "green!60!black" -> ["green!60!black", 100] */
 function splitTint(c: string | null): [string | null, number] {
@@ -154,6 +154,8 @@ export function StylePanel() {
         </>
       )}
 
+      <Presets current={st} />
+
       {tool === "sketch" && objs.length === 0 && <SketchOptions />}
 
       {objs.length > 0 && (
@@ -168,6 +170,42 @@ export function StylePanel() {
       )}
       {objs.length === 0 && <p className="muted small">Nothing selected: these settings apply to the next objects you draw.</p>}
     </div>
+  );
+}
+
+function Presets({ current }: { current: Style }) {
+  const settings = useStore((s) => s.settings);
+  const presets = settings.presets ?? [];
+  const add = async () => {
+    const name = await askText("Save style as a preset", { placeholder: "e.g. thick dashed blue", ok: "Save", label: `It gets the key ⌥${presets.length + 1}.` });
+    if (!name) return;
+    await saveSettings({ ...settings, presets: [...presets, { name, style: { ...current } }] });
+  };
+  const remove = (i: number) => saveSettings({ ...settings, presets: presets.filter((_, j) => j !== i) });
+  return (
+    <section>
+      <h4>Presets</h4>
+      <div className="presets">
+        {presets.map((p, i) => (
+          <span key={i} className="preset" title={i < 9 ? `⌥${i + 1}` : undefined}>
+            <button onClick={() => applyStyle(p.style)}>
+              <svg width="18" height="10">
+                <line x1="1" x2="17" y1="5" y2="5" stroke={xcolorCss(p.style.stroke ?? "black")} strokeWidth={Math.max(1, (p.style.width ?? 0.4) * 2)} strokeDasharray={p.style.dash === "dashed" ? "4 3" : p.style.dash === "dotted" ? "1 2" : undefined} />
+              </svg>
+              {p.name}
+            </button>
+            <button className="x" title="Remove preset" onClick={() => remove(i)}>
+              ×
+            </button>
+          </span>
+        ))}
+        {presets.length < 9 && (
+          <button className="preset-add" title="Save this style as a preset" onClick={add} data-testid="preset-add">
+            +
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 

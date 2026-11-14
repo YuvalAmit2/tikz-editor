@@ -129,8 +129,9 @@ test("saves a .tikz file and opens it again", async ({ page }) => {
   rmSync(path.dirname(file), { recursive: true, force: true });
   await page.keyboard.press("c");
   await drag(page, await at(page, 0, 0), await at(page, 1.5, 0));
-  page.once("dialog", (d) => d.accept(file));
   await page.keyboard.press("Control+s");
+  await page.getByTestId("prompt").locator("input").fill(file);
+  await page.keyboard.press("Enter");
   const read = () => {
     try {
       return readFileSync(file, "utf8");
@@ -139,12 +140,14 @@ test("saves a .tikz file and opens it again", async ({ page }) => {
     }
   };
   await expect.poll(() => read().includes("ellipse [x radius=1.5, y radius=1.5]")).toBe(true);
+  await expect.poll(() => page.evaluate(() => (window as any).__store.get().dirty)).toBe(false);
   const saved = await scene(page);
 
   // Saved, so New doesn't ask to discard changes
   await page.keyboard.press("Control+n");
   expect(await scene(page)).toHaveLength(0);
-  page.once("dialog", (d) => d.accept(file));
   await page.keyboard.press("Control+o");
+  await page.getByTestId("prompt").locator("input").fill(file);
+  await page.keyboard.press("Enter");
   await expect.poll(() => scene(page)).toEqual(saved);
 });

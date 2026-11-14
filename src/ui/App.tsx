@@ -24,7 +24,8 @@ import {
   zoomTrueSize,
 } from "../actions";
 import { call } from "../api/client";
-import { withDefaults, type Settings } from "../model/settings";
+import { DEFAULT_SNIPPET_FILE, withDefaults, type Settings } from "../model/settings";
+import { loadSnippets } from "./snippets";
 import { LINE_WIDTHS } from "../model/types";
 import { cancelDraft, deleteActiveNode, finishCurve, finishPolyline, hasDraft, removeLastDraftPoint, setSpaceDown } from "../tools/controller";
 import { store, useStore } from "../store";
@@ -35,7 +36,7 @@ import { LibraryPanel } from "./LibraryPanel";
 import { CommandPalette } from "./CommandPalette";
 import { Prompt } from "./Prompt";
 import { TextPanel } from "./TextPanel";
-import { TOOLS, Toolbar } from "./Toolbar";
+import { TOOLS, Toolbar, toolKey } from "./Toolbar";
 
 
 function isTyping(e: KeyboardEvent) {
@@ -112,9 +113,18 @@ function onKeyDown(e: KeyboardEvent) {
     if (e.key === "!") return zoomToFit(canvasSize());
     return;
   }
+  // ⌥1-⌥9: style presets (e.code: ⌥ changes e.key on a Mac)
+  if (e.altKey && /^Digit[1-9]$/.test(e.code)) {
+    const p = s.settings.presets[parseInt(e.code.slice(5)) - 1];
+    if (p) {
+      e.preventDefault();
+      applyStyle(p.style);
+    }
+    return;
+  }
   // 1-7: line thickness
   if (/^[1-7]$/.test(e.key)) return applyStyle({ width: LINE_WIDTHS[parseInt(e.key) - 1].pt });
-  const t = TOOLS.find((t) => t.key.toLowerCase() === k);
+  const t = TOOLS.find((t) => toolKey(t).toLowerCase() === k);
   if (t) return setTool(t.tool);
 }
 
@@ -134,6 +144,8 @@ export function App() {
     window.addEventListener("mousedown", noButtonFocus);
     (async () => {
       store.set({ settings: withDefaults(await call<Settings>("getSettings")) });
+      // Ready before the first label (read again whenever a label edit starts).
+      void loadSnippets(store.get().settings.snippetFile || DEFAULT_SNIPPET_FILE);
       const f = await call<string | null>("startupFile");
       if (f) await openPath(f);
     })();

@@ -20,6 +20,11 @@ export const TOOLS: { tool: ToolName; key: string; label: string; icon: React.Re
   { tool: "text", key: "T", label: "Text / math label", icon: <I><path d="M5 5h10M10 5v11" /></I> },
 ];
 
+/** The key for a tool: settings.toolKeys can change the defaults. */
+export function toolKey(t: { tool: ToolName; key: string }): string {
+  return store.get().settings.toolKeys?.[t.tool] ?? t.key;
+}
+
 export function Toolbar() {
   const tool = useStore((s) => s.tool);
   const filePath = useStore((s) => s.filePath);
@@ -33,7 +38,7 @@ export function Toolbar() {
           <button
             key={t.tool}
             className={"tool" + (tool === t.tool ? " active" : "")}
-            title={`${t.label} (${t.key})`}
+            title={`${t.label} (${toolKey(t)})`}
             data-testid={`tool-${t.tool}`}
             onClick={() => setTool(t.tool)}
           >
