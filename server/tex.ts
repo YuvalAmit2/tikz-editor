@@ -162,7 +162,8 @@ export class LabelCompiler {
     const body = jobs
       .map((j, i) => {
         const opts = j.opts ? `,${j.opts}` : "";
-        return `\\typeout{TELABEL:${i}}\\begin{tikzpicture}\\node[outer sep=0pt,align=center${opts}]{${j.body}};\\end{tikzpicture}`;
+        // The body ends its own line, so a % in it can only comment out itself.
+        return `\\typeout{TELABEL:${i}}\\begin{tikzpicture}\\node[outer sep=0pt,align=center${opts}]{${j.body}%\n};\\end{tikzpicture}`;
       })
       .join("\n");
     const tex = `\\endofdump\n\\begin{document}\n${body}\n\\typeout{TELABEL:end}\n\\end{document}\n`;
@@ -211,37 +212,73 @@ export class LabelCompiler {
       for (const j of jobs) result.errors[j.key] = String((e as Error).message);
       return result;
     }
-    const all = await this.compileOnce(jobs);
-    if (all.pdf && all.pages === jobs.length) {
-      // Normal case (also with errors: TeX recovers and still makes one page
-      // per label; labels with errors are reported, not shown).
-      result.pdf = all.pdf.toString("base64");
-      jobs.forEach((j, i) => {
-        if (all.errors[i]) result.errors[j.key] = all.errors[i]!;
+    // 1. Problems that can be seen without TeX (and would derail the batch).
+    const ok: LabelJob[] = [];
+    for (const j of jobs) {
+      const p = precheck(j.body);
+      if (p) result.errors[j.key] = p;
+      else ok.push(j);
+    }
+    if (ok.length === 0) return result;
+    const take = (run: Awaited<ReturnType<LabelCompiler["compileOnce"]>>, list: LabelJob[]) => {
+      result.pdf = run.pdf!.toString("base64");
+      list.forEach((j, i) => {
+        if (run.errors[i]) result.errors[j.key] = run.errors[i]!;
         else result.pages[j.key] = i + 1;
       });
       return result;
+    };
+    // 2. Normal case: one page per label (TeX recovers from most errors; a
+    // label with errors is reported, not shown).
+    const all = await this.compileOnce(ok);
+    if (all.pdf && all.pages === ok.length) return take(all, ok);
+    // 3. A label derailed the run: drop the ones with errors and try again.
+    const good = ok.filter((_, i) => !all.errors[i]);
+    if (good.length > 0 && good.length < ok.length) {
+      const again = await this.compileOnce(good);
+      if (again.pdf && again.pages === good.length) {
+        ok.forEach((j, i) => {
+          if (all.errors[i]) result.errors[j.key] = all.errors[i]!;
+        });
+        return take(again, good);
+      }
     }
-    // Page count doesn't match (a bad label swallowed or added pages): drop
-    // the labels with errors and compile the rest again.
-    const good = jobs.filter((_, i) => !all.errors[i]);
-    jobs.forEach((j, i) => {
-      if (all.errors[i]) result.errors[j.key] = all.errors[i]!;
-    });
-    if (good.length === jobs.length || good.length === 0) {
-      for (const j of jobs) result.errors[j.key] ??= firstErrors(all.log);
-      return result;
+    // 4. Last resort: try each label on its own, then the good ones together.
+    const fine: LabelJob[] = [];
+    for (const j of ok) {
+      const one = await this.compileOnce([j]);
+      if (one.pdf && one.pages === 1 && !one.errors[0]) fine.push(j);
+      else result.errors[j.key] = one.errors[0] ?? firstErrors(one.log);
     }
-    const again = await this.compileOnce(good);
-    if (again.pdf && again.pages === good.length) {
-      result.pdf = again.pdf.toString("base64");
-      good.forEach((j, i) => {
-        if (again.errors[i]) result.errors[j.key] = again.errors[i]!;
-        else result.pages[j.key] = i + 1;
-      });
-    } else for (const j of good) result.errors[j.key] = firstErrors(again.log);
+    if (fine.length === 0) return result;
+    const last = await this.compileOnce(fine);
+    if (last.pdf && last.pages === fine.length) return take(last, fine);
+    for (const j of fine) result.errors[j.key] = firstErrors(last.log);
     return result;
   }
+}
+
+/** Errors we can report without running TeX: unbalanced braces (which
+ *  would swallow the labels after this one) and ending the document. */
+export function precheck(body: string): string | null {
+  let depth = 0;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (c === "\\") {
+      i++;
+      continue;
+    }
+    if (c === "%") {
+      while (i < body.length && body[i] !== "\n") i++;
+      continue;
+    }
+    if (c === "{") depth++;
+    else if (c === "}" && --depth < 0) return "A } has no matching {";
+  }
+  if (depth > 0) return "A { has no matching }";
+  if (/\\(?:begin|end)\s*\{document\}|\\endinput(?![a-zA-Z])/.test(body)) return "\\begin{document}, \\end{document} and \\endinput can't go in a label";
+  if (/\\csname(?![a-zA-Z])/.test(body) && !/\\endcsname(?![a-zA-Z])/.test(body)) return "\\csname without \\endcsname";
+  return null;
 }
 
 /** The first few "! ..." error messages of a TeX log, with their context line. */

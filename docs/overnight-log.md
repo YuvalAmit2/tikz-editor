@@ -57,3 +57,10 @@ Everything here is on the `overnight` branch (tikz-editor, and yalatex for the V
 
 ### Desktop-app tests
 - New `npm run test:app`: Playwright drives the real Electron app with its own data folder (`TIKZ_EDITOR_HOME`, so your settings and library are never touched). It covers the command-line file, ⌘S, compiling a label, the library and its name prompt, a second launch handing its figure to the running window, and ⌘Enter hiding the window.
+
+### Testing pass: bugs found and fixed
+- **One broken label broke every label** (real bug, from before tonight). A stray `}` (e.g. while typing `\frac{a}{b}`) closed the TikZ node early and swallowed everything after it, so every label in the figure showed an error. Fixed three ways: braces are checked before compiling (clear message, "A } has no matching {"), each label sits on its own line so a `%` can only comment out itself, and if a batch still derails, labels are compiled one at a time so good ones always render. Tested with 12 hostile labels next to good ones.
+- **Snippets could miss the first label**: they loaded only when an edit started, and fast typing could beat the load. Now also loaded at startup.
+- **Stretching a curve changed its shape**: auto-smooth curves aren't invariant under non-uniform scaling, so the box handles produced a slightly different curve instead of a stretched one. Now a non-uniform scale fixes the handles first, so the result is exactly the stretched curve (rotations, flips and uniform scaling keep the anchors automatic).
+- The browser tests had settings leaking between tests and some races; fixed.
+- New randomised tests: 300 random curves pass through their anchors with finite handles; smooth anchors have no kink; transforms commute with the curve; random scenes round-trip through .tikz; **40 random figures (every object type, style and label kind) compile with pdfLaTeX** through `\tikzfig`.

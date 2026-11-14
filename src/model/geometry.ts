@@ -1,6 +1,6 @@
 // Geometry helpers: vectors, affine maps, bounding boxes, hit testing.
 import type { CurveObj, EllipseObj, Obj, Vec } from "./types";
-import { sampleCurve } from "./curve";
+import { nodeHandles, sampleCurve } from "./curve";
 
 export const PT_PER_CM = 72.27 / 2.54; // TeX points
 export const ptToCm = (pt: number) => pt / PT_PER_CM;
@@ -132,7 +132,23 @@ export function transformObj(o: Obj, m: Affine): Obj {
 /** Linear part of an affine map applied to a vector (for handle offsets). */
 export const applyLinear = (m: Affine, p: Vec): Vec => ({ x: m.a * p.x + m.c * p.y, y: m.b * p.x + m.d * p.y });
 
+/** Rotations, reflections, uniform scaling and moves (shape-preserving maps). */
+export function isSimilarity(m: Affine): boolean {
+  const s1 = m.a * m.a + m.b * m.b;
+  const s2 = m.c * m.c + m.d * m.d;
+  return Math.abs(s1 - s2) < 1e-9 * Math.max(1, s1) && Math.abs(m.a * m.c + m.b * m.d) < 1e-9 * Math.max(1, s1);
+}
+
 function transformCurve(o: CurveObj, m: Affine): CurveObj {
+  // Automatic handles are recomputed from the anchors, which commutes with
+  // shape-preserving maps but not with stretching or shearing. For those, fix
+  // every handle at its current value first, so the result is exactly the
+  // stretched curve.
+  if (!isSimilarity(m)) {
+    const hs = nodeHandles(o);
+    const zero = { x: 0, y: 0 };
+    o = { ...o, nodes: o.nodes.map((n, j) => (n.mode === "manual" ? n : { p: n.p, mode: "manual" as const, hin: hs[j].hin ?? zero, hout: hs[j].hout ?? zero })) };
+  }
   return {
     ...o,
     nodes: o.nodes.map((n) => ({
