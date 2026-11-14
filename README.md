@@ -2,7 +2,7 @@
 
 A fast figure editor for LaTeX that writes TikZ, made for live-TeXing lecture notes. Labels are compiled with your own preamble, so macros and fonts match your document.
 
-Status: early. Milestone 1 (shapes, snapping, styles, labels, TikZ export) works. See [docs/design.md](docs/design.md) for the design and what's planned.
+Shapes, smooth curves, a sketch tool that cleans up rough strokes, snapping, styles and presets, labels with your preamble and VS Code snippets, a figure library, and a VS Code command to draw a figure for the current line. See [docs/design.md](docs/design.md) for the design.
 
 ## Requirements
 
@@ -22,11 +22,15 @@ or, in a browser:
 npm run dev        # then open http://localhost:5173
 ```
 
-Open a figure directly: `npm run build && npx electron . path/to/graphics/name.tikz` (a path that doesn't exist yet starts a new figure that saves there).
+Open a figure directly: `bin/tikz-editor path/to/graphics/name.tikz` (it builds the app first if needed; a path that doesn't exist yet starts a new figure that saves there; if the app is already running, the figure opens in its window).
+
+### From VS Code
+
+With the yalatex extension, type a figure name on its own line in a `.tex` file and press **Ctrl+F**: the line becomes `\tikzfig{name}` and the editor opens `graphics/name.tikz`. **⌘Enter** saves and takes you back.
 
 ## Using figures in LaTeX
 
-Copy `tex/tikzfig.sty` next to your document or into your personal TeX folder (`~/Library/texmf/tex/latex/tikzfig/` on a Mac), then:
+Run `npm run install-sty` once (it links `tex/tikzfig.sty` into your personal TeX folder; yalatex then loads it automatically), or copy the file next to your document, then:
 
 ```latex
 \usepackage{tikzfig}
@@ -44,26 +48,34 @@ Sizes scale the drawing only; labels keep the document's font size and lines kee
 
 | | |
 |---|---|
-| V L P R C E D T | Select, Line, Polyline/polygon, Rectangle, Circle, Ellipse, Dot, Text |
+| V L P B S R C E D T | Select, Line, Polyline, Curve, Sketch, Rectangle, Circle, Ellipse, Dot, Text |
 | 1–7 | Line thickness (ultra thin … ultra thick) |
+| ⌥1–⌥9 | Style presets |
 | Shift (while drawing) | 15° angles, squares, circles |
 | Alt (while drawing) | No snapping |
 | Double-click | Edit a shape's points / a label's text |
+| …while editing points | Double-click an anchor: smooth ↔ corner; double-click the line: add a point; ⌫: delete the last clicked point; Alt-drag a handle: move it alone |
 | ⇧H ⇧V ⇧R | Flip horizontally / vertically, rotate 90° |
 | Arrow keys | Nudge by one grid step (Shift: four) |
 | ⌘Z ⇧⌘Z ⌘C ⌘V ⌘D ⌘A | Undo, redo, copy, paste, duplicate, select all |
+| ⌘] ⌘[ | Bring to front, send to back |
+| ⌘K | Command palette (every command and library figure) |
 | ⌘S ⌘O ⌘N ⌘, | Save, open, new, settings |
+| ⌘Enter | Save and go back (hides the window) |
 | Space-drag, two-finger scroll | Pan |
 | Pinch, ⌘-scroll, ⌘= ⌘- | Zoom |
 | ⌘0 / ⇧1 | True size / fit figure |
 
-In the text panel: labels are **math by default** (`\cO_K`), but a label containing `$…$` is text (`Consider $\cO_K$`). ⌘T forces text mode. Enter finishes, Shift+Enter starts a new line.
+Tool keys can be changed with `"toolKeys": { "curve": "K" }` in `settings.json` (in `~/Library/Application Support/tikz-editor/`).
+
+In the text panel: labels are **math by default** (`\cO_K`), but a label containing `$…$` is text (`Consider $\cO_K$`). ⌘T forces text mode. Enter finishes, Shift+Enter starts a new line. Your VS Code snippets (yalatex's `vscode/latex.json`) work as in VS Code: type the all-caps prefix, then Tab.
 
 ## Development
 
 ```bash
 npm test                     # unit tests (needs pdflatex)
-npx playwright install chromium
-npm run test:e2e             # UI tests
+npx playwright install chromium   # or set CHROME_PATH to your Chrome
+npm run test:e2e             # UI tests (browser)
+npm run test:app             # desktop app tests (Electron)
 npm run typecheck
 ```

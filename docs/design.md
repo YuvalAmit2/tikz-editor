@@ -2,7 +2,7 @@
 
 Local LaTeX TikZ figure editor, built for speed while live-TeXing lecture notes. Works with the yalatex template (https://github.com/YuvalAmit2/yalatex). Repo: https://github.com/YuvalAmit2/tikz-editor
 
-Status (2026-11-14): milestone 1 built. The app shell, canvas, basic tools, snapping, style panel, labels, TikZ export, `tikzfig.sty` and settings all work. Curves, sketch, snippets, the library and the VS Code command come next.
+Status (2026-11-15): all planned features are built: shapes, curves with auto-smooth anchors, the sketch tool with shape recognition, snippets, the figure library, the ⌘K palette, style presets, and the VS Code Ctrl+F command (yalatex). See docs/overnight-log.md for the decisions made while building them.
 
 ## Architecture
 
@@ -60,7 +60,7 @@ Status (2026-11-14): milestone 1 built. The app shell, canvas, basic tools, snap
   - ⌘Z/⇧⌘Z undo/redo, ⌘C/⌘V/⌘D copy/paste/duplicate, ⌘A select all.
   - ⌘S save, ⌘O open, ⌘N new, ⌘, settings.
   - Space-drag or middle-drag to pan; two-finger scroll pans; pinch/⌘-scroll zooms; ⌘0 true size; ⇧1 fit.
-- **Planned:**
+- **Built (see overnight-log.md):**
   - **Curve tool, "auto-smooth anchors":** click the points the curve passes through, and handles are computed automatically (Hobby-style). Dragging a handle makes that anchor manual.
   - **Sketch tool:** resample and smooth the stroke → detect corners → fit the fewest cubic pieces (Schneider's algorithm) → an editable curve. Extras: shape recognition, redrawing a section, a smoothing slider.
   - ⌘K command palette; editable key bindings.
@@ -73,29 +73,31 @@ Status (2026-11-14): milestone 1 built. The app shell, canvas, basic tools, snap
 - LaTeX errors are shown in the panel; the label shows its source in red on the canvas.
 - Labels are TikZ nodes with an anchor (9-point picker) and a size (`\scriptsize` … `\large`).
 
-## Snippets (planned)
+## Snippets
 
 - Read from yalatex's `vscode/latex.json` and watched for changes. Parsed leniently (the file has comments and trailing commas).
 - Uses VS Code snippet syntax via Monaco: `$1…$0`, `${1:default}`, `$TM_SELECTED_TEXT`. All-caps prefixes are triggered with Tab/Enter.
 
-## Figure library (planned)
+## Figure library
 
-- Select objects → "Save to library" with a name and tags. Stored as scene JSON + SVG thumbnail in a folder you choose.
-- **Inserted items are plain copies.**
+- Select objects → "Add to library" with a name (no tags; search is by name). Stored as one JSON file per item (scene objects + SVG thumbnail) in the library folder (setting; default in the app's data folder).
+- Insert from the Library tab of the right panel or with ⌘K. **Inserted items are plain copies**, placed at the middle of the view.
 
 ## Settings
 
 - A settings window (⌘,), stored as `settings.json` in the app's data folder (`~/Library/Application Support/tikz-editor` on macOS).
-- Current settings: return-to-Select, grid spacing, grid/snapping toggles, Enter finishes a label, document class + preamble or preamble file, text width + guide.
+- Current settings: return-to-Select, grid spacing, grid/snapping toggles, Enter finishes a label, document class + preamble or preamble file, snippet file, library folder, text width + guide, sketch smoothing + shape recognition, style presets, tool keys (`toolKeys`, JSON only).
 
-## VS Code integration (planned)
+## VS Code integration
 
-- A command (added to the yalatex VS Code extension): type a figure name and press a hotkey. The editor opens, and saving writes `graphics/name.tikz` and inserts `\tikzfig{name}`. The app already opens a `.tikz` path given on its command line, and a second launch passes the file to the running window.
+- yalatex extension command, **Ctrl+F** in .tex files: the current line's text names the figure; the line becomes `\tikzfig{name}` and `bin/tikz-editor graphics/name.tikz` runs. On a line with `\tikzfig{name}` it reopens that figure.
+- In the editor, **⌘Enter** saves and hides the window (focus returns to VS Code); the app keeps running so the next figure opens instantly. A second launch passes its file to the running window (saving the current figure first).
 
 ## Testing
 
-- Unit tests (Vitest): geometry, ellipse transforms, snapping, label mode rule, number formatting, and `tikzfig.sty` (compiles figures and checks the sizes TeX reports for every size option).
-- UI tests (Playwright): drawing with snapping, move/scale/point-edit/undo, labels (math/text/error/delete), save and reopen.
+- Unit tests (Vitest): geometry, ellipse transforms, snapping, label mode rule, number formatting, curves (circle/arc/symmetry checks), sketch fitting and recognition, snippet parsing, label compiler isolation of broken labels, snap-index speed, randomised property tests (curves, transforms, round-trips, 40 random figures compiled with pdfLaTeX), and `tikzfig.sty` sizes.
+- UI tests (Playwright, browser): drawing with snapping, move/scale/point-edit/undo, labels, save and reopen, curves and point editing, sketching, snippets, palette, library, presets, z-order/align.
+- App tests (Playwright, Electron): command-line file, save, label compile, library prompt, second launch, ⌘Enter.
 - Golden check: a figure drawn in the UI, saved, and compiled with `\tikzfig` matches the canvas.
 - Manual feel/usability testing on macOS.
 
