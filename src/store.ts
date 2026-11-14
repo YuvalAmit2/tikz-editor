@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, type Settings } from "./model/settings";
 import type { SnapResult } from "./model/snap";
 import { DEFAULT_STYLE, emptyScene, type Obj, type Scene, type Style } from "./model/types";
 
-export type ToolName = "select" | "line" | "polyline" | "rect" | "circle" | "ellipse" | "point" | "text";
+export type ToolName = "select" | "line" | "polyline" | "curve" | "sketch" | "rect" | "circle" | "ellipse" | "point" | "text";
 
 export interface View {
   /** World point (cm) at the centre of the canvas. */
@@ -30,6 +30,8 @@ export interface AppState {
   editingLabel: string | null;
   /** Object whose points are being edited (double-click). */
   pointEdit: string | null;
+  /** In point editing: the anchor last clicked (Backspace deletes it). */
+  activeNode: number | null;
   filePath: string | null;
   dirty: boolean;
   snap: SnapResult | null;
@@ -53,6 +55,7 @@ class Store {
     settings: DEFAULT_SETTINGS,
     editingLabel: null,
     pointEdit: null,
+    activeNode: null,
     filePath: null,
     dirty: false,
     snap: null,

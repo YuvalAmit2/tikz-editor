@@ -11,6 +11,8 @@ export const TOOLS: { tool: ToolName; key: string; label: string; icon: React.Re
   { tool: "select", key: "V", label: "Select", icon: <I><path d="M5 3l10 7-4.5 1L8 16z" fill="currentColor" stroke="none" /></I> },
   { tool: "line", key: "L", label: "Line", icon: <I><path d="M4 16L16 4" /></I> },
   { tool: "polyline", key: "P", label: "Polyline / polygon", icon: <I><path d="M3 15l4-9 5 6 5-8" /></I> },
+  { tool: "curve", key: "B", label: "Curve through points", icon: <I><path d="M3 15C5 4 9 4 10 10s5 6 7-5" /><circle cx="3" cy="15" r="1.2" fill="currentColor" /><circle cx="10" cy="10" r="1.2" fill="currentColor" /><circle cx="17" cy="5" r="1.2" fill="currentColor" /></I> },
+  { tool: "sketch", key: "S", label: "Sketch (smooths your stroke)", icon: <I><path d="M3 14c2-1 2-6 5-6s1 7 4 6 2-8 5-8" /></I> },
   { tool: "rect", key: "R", label: "Rectangle", icon: <I><rect x="3.5" y="5" width="13" height="10" /></I> },
   { tool: "circle", key: "C", label: "Circle", icon: <I><circle cx="10" cy="10" r="6.5" /></I> },
   { tool: "ellipse", key: "E", label: "Ellipse", icon: <I><ellipse cx="10" cy="10" rx="7.5" ry="4.5" /></I> },

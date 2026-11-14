@@ -14,12 +14,11 @@ export function setTool(tool: ToolName) {
   store.set({ tool, pointEdit: null, editingLabel: tool === "select" ? store.get().editingLabel : null });
 }
 
-/** Change style: applies to the selection (if any) and to new objects. */
+/** Change style: applies to the selection, or (nothing selected) to new objects. */
 export function applyStyle(patch: Partial<Style>, extra: Partial<Obj> = {}) {
   const s = store.get();
-  store.set({ style: { ...s.style, ...patch } });
   const sel = store.selected();
-  if (sel.length === 0) return;
+  if (sel.length === 0) return store.set({ style: { ...s.style, ...patch } });
   const changed = sel.map((o) => ({ ...o, ...extra, style: { ...o.style, ...patch } }) as Obj);
   store.commit(store.withReplaced(changed));
 }

@@ -1,7 +1,7 @@
-import { applyProps, applyStyle, deleteSelection } from "../actions";
+import { applyProps, applyStyle, deleteSelection, saveSettings } from "../actions";
 import { ANCHORS, LINE_WIDTHS, type Anchor, type FontSize, type Obj, type Style } from "../model/types";
 import { PALETTE, TINTS, xcolorCss } from "../model/xcolor";
-import { store, useStore } from "../store";
+import { useStore } from "../store";
 
 /** "blue!30" -> ["blue", 30]; "green!60!black" -> ["green!60!black", 100] */
 function splitTint(c: string | null): [string | null, number] {
@@ -48,21 +48,22 @@ export function StylePanel() {
   const sel = useStore((s) => s.selection);
   const scene = useStore((s) => s.scene);
   const current = useStore((s) => s.style);
+  const tool = useStore((s) => s.tool);
   const objs = scene.objects.filter((o) => sel.includes(o.id));
   // Show the style of the first selected object, or the style for new objects.
   const st: Style = objs[0]?.style ?? current;
   const types = new Set(objs.map((o) => o.type));
   const onlyLabels = objs.length > 0 && [...types].every((t) => t === "label");
   const onlyPoints = objs.length > 0 && [...types].every((t) => t === "point");
-  const hasOpen = objs.length === 0 || objs.some((o) => o.type === "path" && !o.closed);
-  const hasFillable = objs.length === 0 || objs.some((o) => (o.type === "path" && o.closed) || o.type === "ellipse");
+  const hasOpen = objs.length === 0 || objs.some((o) => (o.type === "path" || o.type === "curve") && !o.closed);
+  const hasFillable = objs.length === 0 || objs.some((o) => ((o.type === "path" || o.type === "curve") && o.closed) || o.type === "ellipse");
   const labels = objs.filter((o): o is Extract<Obj, { type: "label" }> => o.type === "label");
   const points = objs.filter((o): o is Extract<Obj, { type: "point" }> => o.type === "point");
   const [fillBase, fillTint] = splitTint(st.fill);
 
   return (
     <aside className="panel" data-testid="style-panel">
-      <div className="panel-title">{objs.length === 0 ? "New objects" : objs.length === 1 ? cap(objs[0].type === "path" ? (objs[0].closed ? "polygon" : "line") : objs[0].type) : `${objs.length} objects`}</div>
+      <div className="panel-title">{objs.length === 0 ? "New objects" : objs.length === 1 ? objTitle(objs[0]) : `${objs.length} objects`}</div>
 
       <section>
         <h4>{onlyLabels ? "Text colour" : onlyPoints ? "Colour" : "Stroke"}</h4>
@@ -152,6 +153,8 @@ export function StylePanel() {
         </>
       )}
 
+      {tool === "sketch" && objs.length === 0 && <SketchOptions />}
+
       {objs.length > 0 && (
         <section>
           <button className="text-btn danger" onClick={deleteSelection}>
@@ -160,9 +163,39 @@ export function StylePanel() {
         </section>
       )}
       {objs.length === 0 && <p className="muted small">Nothing selected: these settings apply to the next objects you draw.</p>}
-      <span hidden>{store.get().tool}</span>
     </aside>
   );
 }
 
-const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
+function SketchOptions() {
+  const settings = useStore((s) => s.settings);
+  return (
+    <section data-testid="sketch-options">
+      <h4>Sketch</h4>
+      <label className="slider-row" title="How far the clean curve may stray from your stroke">
+        <span className="muted small">Exact</span>
+        <input type="range" min={1} max={12} step={0.5} value={settings.sketchSmoothing} onChange={(e) => saveSettings({ ...settings, sketchSmoothing: parseFloat(e.target.value) })} />
+        <span className="muted small">Smooth</span>
+      </label>
+      <label className="check-row">
+        <input type="checkbox" checked={settings.recognizeShapes} onChange={(e) => saveSettings({ ...settings, recognizeShapes: e.target.checked })} />
+        <span>Recognise shapes</span>
+      </label>
+    </section>
+  );
+}
+
+function objTitle(o: Obj): string {
+  switch (o.type) {
+    case "path":
+      return o.closed ? (o.pts.length === 4 ? "Quadrilateral" : o.pts.length === 3 ? "Triangle" : "Polygon") : o.pts.length === 2 ? "Line" : "Polyline";
+    case "curve":
+      return o.closed ? "Closed curve" : "Curve";
+    case "ellipse":
+      return Math.abs(o.rx - o.ry) < 1e-9 ? "Circle" : "Ellipse";
+    case "point":
+      return "Point";
+    case "label":
+      return "Label";
+  }
+}

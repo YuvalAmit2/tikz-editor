@@ -1,5 +1,6 @@
 // Geometry helpers: vectors, affine maps, bounding boxes, hit testing.
-import type { EllipseObj, Obj, Vec } from "./types";
+import type { CurveObj, EllipseObj, Obj, Vec } from "./types";
+import { sampleCurve } from "./curve";
 
 export const PT_PER_CM = 72.27 / 2.54; // TeX points
 export const ptToCm = (pt: number) => pt / PT_PER_CM;
@@ -123,7 +124,24 @@ export function transformObj(o: Obj, m: Affine): Obj {
       return { ...o, p: applyAffine(m, o.p) };
     case "label":
       return { ...o, p: applyAffine(m, o.p) };
+    case "curve":
+      return transformCurve(o, m);
   }
+}
+
+/** Linear part of an affine map applied to a vector (for handle offsets). */
+export const applyLinear = (m: Affine, p: Vec): Vec => ({ x: m.a * p.x + m.c * p.y, y: m.b * p.x + m.d * p.y });
+
+function transformCurve(o: CurveObj, m: Affine): CurveObj {
+  return {
+    ...o,
+    nodes: o.nodes.map((n) => ({
+      ...n,
+      p: applyAffine(m, n.p),
+      ...(n.hin ? { hin: applyLinear(m, n.hin) } : {}),
+      ...(n.hout ? { hout: applyLinear(m, n.hout) } : {}),
+    })),
+  };
 }
 
 /** Point on an ellipse at parameter t (radians). */
@@ -151,6 +169,8 @@ export function geomBox(o: Obj): Box | null {
     case "point":
     case "label":
       return boxOf([o.p]);
+    case "curve":
+      return boxOf(sampleCurve(o));
   }
 }
 
@@ -249,6 +269,14 @@ export function hitDistance(o: Obj, p: Vec, labelBox?: (o: Obj) => Box | null): 
     }
     case "point":
       return Math.max(0, dist(p, o.p) - ptToCm(o.size));
+    case "curve": {
+      const pts = sampleCurve(o);
+      let d = Infinity;
+      for (let i = 0; i + 1 < pts.length; i++) d = Math.min(d, distToSegment(p, pts[i], pts[i + 1]));
+      if (pts.length === 1) d = dist(p, pts[0]);
+      if (o.closed && o.style.fill && pointInPolygon(p, pts)) d = 0;
+      return d;
+    }
     case "label": {
       const b = labelBox?.(o);
       if (!b) return dist(p, o.p);

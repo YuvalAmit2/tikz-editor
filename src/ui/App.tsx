@@ -22,7 +22,7 @@ import {
 import { call } from "../api/client";
 import { withDefaults, type Settings } from "../model/settings";
 import { LINE_WIDTHS } from "../model/types";
-import { cancelDraft, finishPolyline, hasDraft, removeLastDraftPoint, setSpaceDown } from "../tools/controller";
+import { cancelDraft, deleteActiveNode, finishCurve, finishPolyline, hasDraft, removeLastDraftPoint, setSpaceDown } from "../tools/controller";
 import { store } from "../store";
 import { Canvas } from "./Canvas";
 import { SettingsDialog } from "./SettingsDialog";
@@ -72,12 +72,13 @@ function onKeyDown(e: KeyboardEvent) {
   }
   if (e.key === "Escape") {
     if (hasDraft()) return cancelDraft();
-    if (s.pointEdit) return store.set({ pointEdit: null });
+    if (s.pointEdit) return store.set({ pointEdit: null, activeNode: null });
     if (s.tool !== "select") return setTool("select");
     return store.set({ selection: [], editingLabel: null });
   }
   if (e.key === "Enter") {
     if (s.tool === "polyline" && hasDraft()) return finishPolyline(false);
+    if (s.tool === "curve" && hasDraft()) return finishCurve(false);
     const sel = store.selected();
     if (sel.length === 1 && sel[0].type === "label") {
       e.preventDefault();
@@ -86,7 +87,8 @@ function onKeyDown(e: KeyboardEvent) {
     return;
   }
   if (e.key === "Backspace" || e.key === "Delete") {
-    if (s.tool === "polyline" && hasDraft()) return removeLastDraftPoint();
+    if ((s.tool === "polyline" || s.tool === "curve") && hasDraft()) return removeLastDraftPoint();
+    if (deleteActiveNode()) return;
     return deleteSelection();
   }
   if (e.key.startsWith("Arrow")) {

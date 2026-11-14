@@ -75,4 +75,48 @@ describe("tikzfig.sty", () => {
   it("round-trips the scene through the .tikz file", () => {
     expect(tikzToScene(sceneToTikz(rect))).toEqual(rect);
   });
+
+  it("exports curves as explicit Béziers that compile and scale", () => {
+    const circle: Scene = {
+      version: 1,
+      objects: [
+        {
+          id: "c",
+          type: "curve",
+          style: thin,
+          closed: true,
+          nodes: [
+            { p: { x: 1, y: 0 }, mode: "smooth" },
+            { p: { x: 0, y: 1 }, mode: "smooth" },
+            { p: { x: -1, y: 0 }, mode: "smooth" },
+            { p: { x: 0, y: -1 }, mode: "smooth" },
+          ],
+        },
+      ],
+    };
+    const wave: Scene = {
+      version: 1,
+      objects: [
+        {
+          id: "w",
+          type: "curve",
+          style: { ...thin, arrowEnd: true },
+          closed: false,
+          nodes: [
+            { p: { x: 0, y: 0 }, mode: "smooth" },
+            { p: { x: 1, y: 1 }, mode: "corner" },
+            { p: { x: 2, y: 0 }, mode: "manual", hin: { x: -0.3, y: 0.3 }, hout: { x: 0.5, y: 0 } },
+            { p: { x: 3, y: 1 }, mode: "smooth" },
+          ],
+        },
+      ],
+    };
+    const tikz = sceneToTikz(circle);
+    expect(tikz).toMatch(/\.\. controls .* \.\. cycle;/);
+    const w = measure({ circle, wave }, ["\\tikzfig{circle}", "\\tikzfig[4cm]{circle}", "\\tikzfig{wave}"]);
+    expect(w[0]).toBeCloseTo(2 * CM + 0.4, 0);
+    expect(w[1]).toBeCloseTo(4 * CM + 0.4, 0);
+    expect(w[2]).toBeGreaterThan(3 * CM);
+    expect(tikzToScene(sceneToTikz(wave))).toEqual(wave);
+  });
 });

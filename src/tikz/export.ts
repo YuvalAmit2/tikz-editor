@@ -7,6 +7,7 @@
 //     width=/height= options to compute the scale.
 import { labelBody, labelNodeOpts } from "../labels/mode";
 import { sceneGeomBox } from "../model/geometry";
+import { curveSegments } from "../model/curve";
 import type { Obj, Scene, Style } from "../model/types";
 
 export const SCENE_MARKER = "%tikz-editor-scene ";
@@ -41,10 +42,23 @@ function objToTikz(o: Obj): string | null {
       const body = o.pts.map(coord).join(" -- ") + (o.closed ? " -- cycle" : "");
       return `\\path[${opts.join(",")}] ${body};`;
     }
+    case "curve": {
+      const segs = curveSegments(o);
+      if (segs.length === 0) return null;
+      const closed = o.closed && o.nodes.length >= 3;
+      const opts = styleOpts(o.style, { arrows: !closed });
+      if (opts.length === 0) return null;
+      let body = coord(segs[0].a);
+      segs.forEach((s, i) => {
+        const last = closed && i === segs.length - 1;
+        body += ` .. controls ${coord(s.c1)} and ${coord(s.c2)} .. ${last ? "cycle" : coord(s.b)}`;
+      });
+      return `\\path[${opts.join(",")}] ${body};`;
+    }
     case "ellipse": {
       const opts = styleOpts(o.style, { arrows: false });
       if (opts.length === 0) return null;
-      if (Math.abs(o.rot) > 1e-9) opts.push(`rotate around={${fmt(o.rot)}:${coord(o.c)}}`);
+      if (Math.abs(o.rot) > 1e-9 && Math.abs(o.rx - o.ry) > 1e-9) opts.push(`rotate around={${fmt(o.rot)}:${coord(o.c)}}`);
       return `\\path[${opts.join(",")}] ${coord(o.c)} ellipse [x radius=${fmt(o.rx)}, y radius=${fmt(o.ry)}];`;
     }
     case "point": {

@@ -12,6 +12,7 @@ import {
   segIntersect,
 } from "./geometry";
 import type { EllipseObj, Obj, Vec } from "./types";
+import { sampleCurve } from "./curve";
 
 export type SnapKind = "vertex" | "midpoint" | "center" | "quadrant" | "intersection" | "on-object" | "grid" | "angle" | "none";
 
@@ -29,14 +30,25 @@ export interface SnapIndex {
 export function buildSnapIndex(objs: Obj[]): SnapIndex {
   const points: SnapIndex["points"] = [];
   const segments: [Vec, Vec][] = [];
+  // Which object (and which piece of it) each segment came from, so that
+  // neighbouring pieces of one object don't "intersect" at their shared end.
+  const owner: { id: number; i: number; n: number; closed: boolean }[] = [];
   const ellipses: EllipseObj[] = [];
-  for (const o of objs) {
+  const addPolyline = (pts: Vec[], closed: boolean, id: number) => {
+    const segs = pathSegments({ pts, closed });
+    segs.forEach((s, i) => {
+      segments.push(s);
+      owner.push({ id, i, n: segs.length, closed });
+    });
+  };
+  objs.forEach((o, id) => {
     if (o.type === "path") {
       for (const p of o.pts) points.push({ p, kind: "vertex" });
-      for (const [a, b] of pathSegments(o)) {
-        segments.push([a, b]);
-        points.push({ p: lerp(a, b, 0.5), kind: "midpoint" });
-      }
+      for (const [a, b] of pathSegments(o)) points.push({ p: lerp(a, b, 0.5), kind: "midpoint" });
+      addPolyline(o.pts, o.closed, id);
+    } else if (o.type === "curve") {
+      for (const n of o.nodes) points.push({ p: n.p, kind: "vertex" });
+      addPolyline(sampleCurve(o, 24), false, id);
     } else if (o.type === "ellipse") {
       ellipses.push(o);
       points.push({ p: o.c, kind: "center" });
@@ -44,10 +56,18 @@ export function buildSnapIndex(objs: Obj[]): SnapIndex {
     } else if (o.type === "point" || o.type === "label") {
       points.push({ p: o.p, kind: "vertex" });
     }
-  }
+  });
+  const neighbours = (i: number, j: number) => {
+    const a = owner[i];
+    const b = owner[j];
+    if (a.id !== b.id) return false;
+    const d = Math.abs(a.i - b.i);
+    return d <= 1 || (a.closed && d === a.n - 1);
+  };
   // Intersections
   for (let i = 0; i < segments.length; i++)
     for (let j = i + 1; j < segments.length; j++) {
+      if (neighbours(i, j)) continue;
       const x = segIntersect(segments[i][0], segments[i][1], segments[j][0], segments[j][1]);
       if (x) points.push({ p: x, kind: "intersection" });
     }

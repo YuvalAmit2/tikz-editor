@@ -4,6 +4,7 @@ import { getLabel, labelBox, labelImage, labelStore } from "../labels/render";
 import { ptToCm, sceneGeomBox, sub, len, type Box } from "../model/geometry";
 import type { Obj, Style, Vec } from "../model/types";
 import { xcolorCss } from "../model/xcolor";
+import { curvePathD, curveSegments } from "../model/curve";
 import {
   getHandles,
   isPanning,
@@ -174,6 +175,25 @@ function ObjView({ o, z }: { o: Obj; z: number }) {
         </g>
       );
     }
+    case "curve": {
+      const segs = curveSegments(o);
+      const closed = o.closed && o.nodes.length >= 3;
+      const first = segs[0];
+      const last = segs[segs.length - 1];
+      const tipFrom = (s: typeof last, end: boolean) => {
+        // Direction of the curve at its end: towards the nearest distinct control point
+        const cands = end ? [s.c2, s.c1, s.a] : [s.c1, s.c2, s.b];
+        const at = end ? s.b : s.a;
+        return cands.find((c) => Math.hypot(c.x - at.x, c.y - at.y) > 1e-6) ?? (end ? s.a : s.b);
+      };
+      return (
+        <g data-id={o.id}>
+          <path d={curvePathD(o)} {...strokeProps(o.style, z)} />
+          {!closed && last && o.style.stroke && o.style.arrowEnd && <ArrowTip tip={last.b} from={tipFrom(last, true)} st={o.style} z={z} />}
+          {!closed && first && o.style.stroke && o.style.arrowStart && <ArrowTip tip={first.a} from={tipFrom(first, false)} st={o.style} z={z} />}
+        </g>
+      );
+    }
     case "ellipse":
       return (
         <ellipse
@@ -225,6 +245,8 @@ function LabelView({ o, z }: { o: Extract<Obj, { type: "label" }>; z: number }) 
 function Highlight({ o, z }: { o: Obj; z: number }) {
   const w = 1.5 / z;
   switch (o.type) {
+    case "curve":
+      return <path d={curvePathD(o)} fill="none" stroke={SEL} strokeWidth={w} opacity={0.7} pointerEvents="none" />;
     case "path": {
       const d = o.pts.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ") + (o.closed ? " Z" : "");
       return <path d={d} fill="none" stroke={SEL} strokeWidth={w} opacity={0.7} pointerEvents="none" />;
@@ -258,6 +280,8 @@ function Highlight({ o, z }: { o: Obj; z: number }) {
 
 function SelectionOverlay({ toScreen, multi }: { toScreen: (p: Vec) => Vec; multi: boolean }) {
   const pointEdit = useStore((s) => s.pointEdit);
+  const activeNode = useStore((s) => s.activeNode);
+  const editObj = useStore((s) => (s.pointEdit ? s.scene.objects.find((o) => o.id === s.pointEdit) : undefined));
   useStore((s) => s.scene);
   useStore((s) => s.selection);
   const handles = getHandles();
@@ -266,9 +290,23 @@ function SelectionOverlay({ toScreen, multi }: { toScreen: (p: Vec) => Vec; mult
     <g pointerEvents="none">
       {b && <MarqueeRect b={b} toScreen={toScreen} dashed />}
       {handles.map((h, i) => {
+        if (h.kind !== "control" || !h.from) return null;
         const p = toScreen(h.p);
+        const a = toScreen(h.from);
+        return <line key={"l" + i} x1={a.x} y1={a.y} x2={p.x} y2={p.y} stroke={SEL} strokeWidth={1} opacity={0.6} />;
+      })}
+      {handles.map((h, i) => {
+        const p = toScreen(h.p);
+        if (h.kind === "control") return <rect key={i} x={p.x - 3.5} y={p.y - 3.5} width={7} height={7} fill={SEL} stroke="white" strokeWidth={1} transform={`rotate(45 ${p.x} ${p.y})`} data-testid="control-handle" />;
+        const nodeIndex = editObj?.type === "curve" ? Math.floor(h.handle / 3) : h.handle;
+        const active = activeNode === nodeIndex && editObj?.type !== "ellipse";
+        const corner = editObj?.type === "curve" && editObj.nodes[nodeIndex]?.mode === "corner";
         return pointEdit ? (
-          <circle key={i} cx={p.x} cy={p.y} r={4.5} fill="white" stroke={SEL} strokeWidth={1.5} data-testid="vertex-handle" />
+          corner ? (
+            <rect key={i} x={p.x - 4} y={p.y - 4} width={8} height={8} fill={active ? SEL : "white"} stroke={SEL} strokeWidth={1.5} data-testid="vertex-handle" />
+          ) : (
+            <circle key={i} cx={p.x} cy={p.y} r={4.5} fill={active ? SEL : "white"} stroke={SEL} strokeWidth={1.5} data-testid="vertex-handle" />
+          )
         ) : (
           <rect key={i} x={p.x - 4} y={p.y - 4} width={8} height={8} fill="white" stroke={SEL} strokeWidth={1.5} data-testid="scale-handle" />
         );
@@ -353,9 +391,11 @@ function StatusBar() {
   const pointEdit = useStore((s) => s.pointEdit);
   const hint =
     pointEdit
-      ? "Editing points — drag a point; Esc to finish"
-      : tool === "polyline"
-        ? "Click to add points · click the first point to close · double-click or Enter to finish"
+      ? "Drag points · double-click the line to add a point · Backspace deletes · Esc: done"
+      : tool === "polyline" || tool === "curve"
+        ? "Click to add points · click the first point to close · Enter or double-click to finish"
+        : tool === "sketch"
+          ? "Draw roughly; it becomes a smooth curve or a clean shape"
         : tool === "select"
           ? ""
           : "Shift: 15° angles / squares · Alt: no snapping · Esc: cancel";

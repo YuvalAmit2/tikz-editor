@@ -106,7 +106,23 @@ export interface LabelObj extends Base {
   font: FontSize;
 }
 
-export type Obj = PathObj | EllipseObj | PointObj | LabelObj;
+/** An anchor of a smooth curve (see model/curve.ts). */
+export interface CurveNode {
+  p: Vec;
+  mode: "smooth" | "corner" | "manual";
+  /** Manual anchors only: handle offsets from p (incoming and outgoing). */
+  hin?: Vec;
+  hout?: Vec;
+}
+
+/** A smooth curve through its anchors: cubic Bézier pieces. */
+export interface CurveObj extends Base {
+  type: "curve";
+  nodes: CurveNode[];
+  closed: boolean;
+}
+
+export type Obj = PathObj | EllipseObj | PointObj | LabelObj | CurveObj;
 
 export interface Scene {
   version: 1;

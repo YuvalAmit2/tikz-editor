@@ -26,6 +26,13 @@ export interface Settings {
   enterCommitsLabel: boolean;
   /** Path to the VS Code snippet file (latex.json). */
   snippetFile: string;
+  /** Sketch tool: how far (screen px) the clean curve may stray from the stroke. */
+  sketchSmoothing: number;
+  /** Sketch tool: turn strokes that look like lines, polygons, circles or
+   *  ellipses into those shapes. */
+  recognizeShapes: boolean;
+  /** Folder of the figure library. Empty: "library" in the app's data folder. */
+  libraryDir: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,7 +48,10 @@ export const DEFAULT_SETTINGS: Settings = {
   textWidthCm: 15.9,
   showTextWidthGuide: false,
   enterCommitsLabel: true,
-  snippetFile: "",
+  snippetFile: "~/latex/yalatex/vscode/latex.json",
+  sketchSmoothing: 4,
+  recognizeShapes: true,
+  libraryDir: "",
 };
 
 export function withDefaults(s: Partial<Settings> | undefined): Settings {
