@@ -1,7 +1,7 @@
 // Commands used by the keyboard, toolbar and panels.
 import { call, isElectron } from "./api/client";
 import { clearLabelCache } from "./labels/render";
-import { scalingAbout, rotationAbout, transformObj, translation, unionBox, geomBox, type Box } from "./model/geometry";
+import { scalingAbout, rotationAbout, transformObj, translation, unionBox, geomBox, sceneGeomBox, type Box } from "./model/geometry";
 import type { Settings } from "./model/settings";
 import { emptyScene, newId, type Dash, type LabelObj, type Obj, type Style } from "./model/types";
 import { placeLabel } from "./model/labelPlace";
@@ -159,7 +159,7 @@ export async function openPath(path: string) {
   if (!exists) {
     // A new figure that will be saved to this path.
     store.resetHistory();
-    store.set({ scene: emptyScene(), filePath: path, dirty: false, selection: [], editingLabel: null, pointEdit: null });
+    store.set({ scene: emptyScene(), filePath: path, dirty: false, selection: [], editingLabel: null, pointEdit: null, guideCx: 0 });
     return;
   }
   const text = await call<string>("readFile", { path });
@@ -169,7 +169,8 @@ export async function openPath(path: string) {
     return;
   }
   store.resetHistory();
-  store.set({ scene, filePath: path, dirty: false, selection: [], editingLabel: null, pointEdit: null });
+  const b = sceneGeomBox(scene.objects);
+  store.set({ scene, filePath: path, dirty: false, selection: [], editingLabel: null, pointEdit: null, guideCx: b ? (b.minX + b.maxX) / 2 : 0 });
 }
 
 export async function open() {
@@ -181,7 +182,7 @@ export async function open() {
 export function newFigure() {
   if (store.get().dirty && !window.confirm("Discard unsaved changes?")) return;
   store.resetHistory();
-  store.set({ scene: emptyScene(), filePath: null, dirty: false, selection: [], editingLabel: null, pointEdit: null });
+  store.set({ scene: emptyScene(), filePath: null, dirty: false, selection: [], editingLabel: null, pointEdit: null, guideCx: 0 });
 }
 
 export async function saveSettings(settings: Settings) {

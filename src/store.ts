@@ -49,6 +49,12 @@ export interface AppState {
   side: "style" | "library";
   /** Show (and allow dragging) the anchors and handles of selected curves. */
   showControls: boolean;
+  /** Centre of the text-width guide (fixed when a figure is opened). */
+  guideCx: number;
+  /** While editing points: where a double-click would add one. */
+  insertHint: { x: number; y: number } | null;
+  /** Mouse cursor while over a handle. */
+  hoverCursor: string | null;
 }
 
 type Listener = () => void;
@@ -76,6 +82,9 @@ class Store {
     palette: false,
     side: "style",
     showControls: false,
+    guideCx: 0,
+    insertHint: null,
+    hoverCursor: null,
   };
   private listeners = new Set<Listener>();
   private undoStack: Scene[] = [];

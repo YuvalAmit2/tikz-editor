@@ -116,10 +116,11 @@ export function snapGrid(p: Vec, g: number): Vec {
   return { x: Math.round(p.x / g) * g + 0, y: Math.round(p.y / g) * g + 0 };
 }
 
-/** The grid spacing actually drawn at this zoom (doubled until ≥ 8 px). */
+/** The grid spacing actually drawn at this zoom (doubled until ≥ 12 px:
+ *  finer lines only show when zoomed in). */
 export function visibleGrid(gridSize: number, pxPerCm: number): number {
   let g = gridSize;
-  while (g * pxPerCm < 8) g *= 2;
+  while (g * pxPerCm < 12) g *= 2;
   return g;
 }
 

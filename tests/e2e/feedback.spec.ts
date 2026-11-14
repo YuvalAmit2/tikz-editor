@@ -88,11 +88,12 @@ test("grid lines are magnetic: dragging along a vertical line keeps x, y moves f
   await page.keyboard.press("l");
   await page.mouse.move(...(await at(page, 1.02, 0)));
   await page.mouse.down();
-  await page.mouse.move(...(await at(page, 1.03, 1.62)), { steps: 6 });
+  // (at 40 px/cm the 0.25 cm grid is too fine to show: lines every 0.5 cm)
+  await page.mouse.move(...(await at(page, 1.03, 1.27)), { steps: 6 });
   await page.mouse.up();
   const o = (await objs(page))[0];
   expect(o.pts[1].x).toBe(1);
-  expect(o.pts[1].y).toBeCloseTo(1.62, 2);
+  expect(o.pts[1].y).toBeCloseTo(1.27, 2);
 });
 
 test("trim: a line through a circle, click the top half away", async ({ page }) => {

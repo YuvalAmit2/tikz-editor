@@ -151,7 +151,7 @@ describe("magnetic grid lines", () => {
     expect(snapGridLines({ x: 1.12, y: 0.62 }, 0.25, 80, r).kind).toBe("none");
   });
   it("uses the grid that's drawn when zoomed out", () => {
-    // 0.25 cm at 20 px/cm is 5 px: drawn (and snapped) every 0.5 cm
-    expect(snapGridLines({ x: 0.26, y: 0.49 }, 0.25, 20, 10 / 20).p).toEqual({ x: 0.26, y: 0.5 });
+    // 0.25 cm at 30 px/cm is 7.5 px: drawn (and snapped) every 0.5 cm
+    expect(snapGridLines({ x: 0.26, y: 0.49 }, 0.25, 30, 10 / 30).p).toEqual({ x: 0.26, y: 0.5 });
   });
 });

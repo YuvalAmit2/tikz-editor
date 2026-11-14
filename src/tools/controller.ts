@@ -12,12 +12,12 @@ import {
   ellipsePoint,
   type Box,
 } from "../model/geometry";
-import { buildSnapIndex, snap, type SnapIndex, type SnapResult } from "../model/snap";
+import { buildSnapIndex, snap, visibleGrid, type SnapIndex, type SnapResult } from "../model/snap";
 import { newId, type CurveNode, type CurveObj, type EllipseObj, type Obj, type PathObj, type Scene, type Vec } from "../model/types";
 import { nodeHandles, sampleCurve } from "../model/curve";
 import { processStroke } from "../model/sketch";
 import { trimAt, type Piece } from "../model/trim";
-import { closestOnSegment, pathSegments } from "../model/geometry";
+import { closestOnSegment, distToSegment as distToSeg, pathSegments, rotationAbout } from "../model/geometry";
 import { labelBox } from "../labels/render";
 import { store, type ToolName } from "../store";
 
@@ -35,8 +35,9 @@ type Drag =
   | { kind: "pan"; startScreen: Vec; startView: { cx: number; cy: number } }
   | { kind: "move"; ref: Vec; before: Scene; orig: Obj[]; moved: boolean; downScreen: Vec }
   | { kind: "marquee"; start: Vec; add: boolean; base: string[] }
-  | { kind: "scale"; fixed: Vec; corner: Vec; before: Scene; orig: Obj[] }
-  | { kind: "handle"; id: string; handle: number; before: Scene; orig: Obj; handles?: { hin: Vec | null; hout: Vec | null }[] }
+  | { kind: "scale"; box: Box; handle: number; before: Scene; orig: Obj[] }
+  | { kind: "rotate"; c: Vec; a0: number; before: Scene; orig: Obj[] }
+  | { kind: "handle"; id: string; handle: number; before: Scene; orig: Obj; handles?: { hin: Vec | null; hout: Vec | null }[]; meta: boolean }
   | { kind: "draw"; downScreen: Vec; start: Vec }
   | { kind: "curveNode"; index: number; downScreen: Vec }
   | { kind: "sketch"; pts: Vec[] }
@@ -95,7 +96,7 @@ export interface Handle {
   /** Object id, or "" for the selection box. */
   id: string;
   /** box: selection-box corner; anchor: a vertex/anchor; control: a curve handle. */
-  kind: "box" | "anchor" | "control";
+  kind: "box" | "edge" | "rotate" | "anchor" | "control";
   /** For a control: the anchor it belongs to (drawn as a line to it). */
   from?: Vec;
   /** For the selection box: corner index 0..3 (SW, SE, NE, NW). For a path:
@@ -125,6 +126,18 @@ function curveHandles(o: CurveObj): Handle[] {
 
 export function getHandles(): Handle[] {
   const s = store.get();
+  // Drawing a curve: its anchors so far, and the handles of the one being
+  // placed (dragging pulls them out, like a pen tool).
+  if (s.tool === "curve" && cdraft.length) {
+    const hs: Handle[] = cdraft.map((n, j) => ({ id: "__draft", kind: "anchor", handle: 3 * j, p: n.p }));
+    const j = cdraft.length - 1;
+    const n = cdraft[j];
+    if (n.mode === "manual") {
+      if (n.hin) hs.push({ id: "__draft", kind: "control", handle: 3 * j + 1, p: add(n.p, n.hin), from: n.p });
+      if (n.hout) hs.push({ id: "__draft", kind: "control", handle: 3 * j + 2, p: add(n.p, n.hout), from: n.p });
+    }
+    return hs;
+  }
   if (s.tool !== "select") return [];
   if (s.pointEdit) {
     const o = store.objById(s.pointEdit);
@@ -144,13 +157,43 @@ export function getHandles(): Handle[] {
   if (sel.length === 0 || (sel.length === 1 && (sel[0].type === "label" || sel[0].type === "point"))) return curves;
   const b = selectionBox();
   if (!b || (b.maxX - b.minX < 1e-9 && b.maxY - b.minY < 1e-9)) return curves;
-  return [
-    ...curves,
+  return [...curves, ...boxHandles(b, s.view.zoom)];
+}
+
+/** Selection-box handles: corners 0..3 (SW, SE, NE, NW), edge middles 4..7
+ *  (S, E, N, W: scale one way only) and 8, the rotate knob above the top. */
+export function boxHandles(b: Box, zoom: number): Handle[] {
+  const cx = (b.minX + b.maxX) / 2;
+  const cy = (b.minY + b.maxY) / 2;
+  const wide = (b.maxX - b.minX) * zoom > 1;
+  const tall = (b.maxY - b.minY) * zoom > 1;
+  const hs: Handle[] = [
     { id: "", kind: "box", handle: 0, p: { x: b.minX, y: b.minY } },
     { id: "", kind: "box", handle: 1, p: { x: b.maxX, y: b.minY } },
     { id: "", kind: "box", handle: 2, p: { x: b.maxX, y: b.maxY } },
     { id: "", kind: "box", handle: 3, p: { x: b.minX, y: b.maxY } },
   ];
+  // Edge handles only where the box has room for them.
+  if (tall && (b.maxX - b.minX) * zoom > 24) {
+    hs.push({ id: "", kind: "edge", handle: 4, p: { x: cx, y: b.minY } });
+    hs.push({ id: "", kind: "edge", handle: 6, p: { x: cx, y: b.maxY } });
+  }
+  if (wide && (b.maxY - b.minY) * zoom > 24) {
+    hs.push({ id: "", kind: "edge", handle: 5, p: { x: b.maxX, y: cy } });
+    hs.push({ id: "", kind: "edge", handle: 7, p: { x: b.minX, y: cy } });
+  }
+  hs.push({ id: "", kind: "rotate", handle: 8, p: { x: cx, y: b.maxY + ROTATE_PX / zoom }, from: { x: cx, y: b.maxY } });
+  return hs;
+}
+const ROTATE_PX = 22;
+
+/** Mouse cursor over a handle. */
+function handleCursor(h: Handle | null): string | null {
+  if (!h) return null;
+  if (h.kind === "rotate") return "grab";
+  if (h.kind === "edge") return h.handle % 2 === 0 ? "ns-resize" : "ew-resize";
+  if (h.kind === "box") return h.handle % 2 === 0 ? "nesw-resize" : "nwse-resize";
+  return "move";
 }
 
 function handleAt(e: PEvent): Handle | null {
@@ -168,9 +211,12 @@ function handleAt(e: PEvent): Handle | null {
   return best;
 }
 
+const HIT_PX = 10;
+
 function objectAt(p: Vec): Obj | null {
   const { scene, view } = store.get();
-  const tol = 6 / view.zoom;
+  // Generous: lines are thin, and you shouldn't have to aim.
+  const tol = HIT_PX / view.zoom;
   let best: Obj | null = null;
   let bd = tol;
   // Topmost first; a closer hit wins only when clearly closer.
@@ -322,7 +368,8 @@ const TRIMMABLE = new Set(["path", "curve", "ellipse"]);
 
 function trimTarget(p: Vec): Obj | null {
   const { scene, view } = store.get();
-  const tol = 6 / view.zoom;
+  // Generous: lines are thin, and you shouldn't have to aim.
+  const tol = HIT_PX / view.zoom;
   let best: Obj | null = null;
   let bd = tol;
   for (const o of scene.objects) {
@@ -470,21 +517,24 @@ function selectDown(e: PEvent) {
   if (h) {
     if (h.id === "") {
       const b = selectionBox()!;
-      const corners = [
-        { x: b.minX, y: b.minY },
-        { x: b.maxX, y: b.minY },
-        { x: b.maxX, y: b.maxY },
-        { x: b.minX, y: b.maxY },
-      ];
-      drag = { kind: "scale", corner: corners[h.handle], fixed: corners[(h.handle + 2) % 4], before: s.scene, orig: store.selected() };
+      if (h.kind === "rotate") {
+        const c = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+        drag = { kind: "rotate", c, a0: Math.atan2(e.world.y - c.y, e.world.x - c.x), before: s.scene, orig: store.selected() };
+      } else drag = { kind: "scale", box: b, handle: h.handle, before: s.scene, orig: store.selected() };
     } else {
       const orig = store.objById(h.id)!;
-      drag = { kind: "handle", id: h.id, handle: h.handle, before: s.scene, orig, handles: orig.type === "curve" ? nodeHandles(orig) : undefined };
+      drag = { kind: "handle", id: h.id, handle: h.handle, before: s.scene, orig, handles: orig.type === "curve" ? nodeHandles(orig) : undefined, meta: e.meta };
       if (h.kind === "anchor" && orig.type !== "ellipse") store.set({ activeNode: orig.type === "curve" ? Math.floor(h.handle / 3) : h.handle });
     }
     return;
   }
-  const hit = objectAt(e.world);
+  let hit = objectAt(e.world);
+  // Inside the box around what's selected: drag the selection (as in other editors).
+  if (!hit && !e.shift && !s.pointEdit && s.selection.length) {
+    const b = selectionBox();
+    const pad = 4 / s.view.zoom;
+    if (b && e.world.x >= b.minX - pad && e.world.x <= b.maxX + pad && e.world.y >= b.minY - pad && e.world.y <= b.maxY + pad) hit = store.objById(s.selection[0]) ?? null;
+  }
   if (s.pointEdit && (!hit || hit.id !== s.pointEdit)) store.set({ pointEdit: null, activeNode: null });
   if (!hit) {
     drag = { kind: "marquee", start: e.world, add: e.shift, base: e.shift ? s.selection : [] };
@@ -548,13 +598,21 @@ export function onPointerMove(e: PEvent) {
       store.set({ marquee: b, selection: [...new Set([...drag.base, ...inside])] });
       return;
     }
+    case "rotate": {
+      let deg = ((Math.atan2(e.world.y - drag.c.y, e.world.x - drag.c.x) - drag.a0) * 180) / Math.PI;
+      // ⇧: steps of 15°
+      if (e.shift) deg = Math.round(deg / 15) * 15;
+      const m = rotationAbout(drag.c, deg);
+      store.set({ snap: null, message: `${Math.round((((deg % 360) + 540) % 360) - 180)}°` });
+      store.preview(store.withReplaced(drag.orig.map((o) => transformObj(o, m)), drag.before));
+      return;
+    }
     case "scale": {
       const sr = doSnap(e.world, e, { exclude: drag.orig.map((o) => o.id) });
-      const f = drag.fixed;
-      const c0 = drag.corner;
-      let sx = Math.abs(c0.x - f.x) < 1e-9 ? 1 : (sr.p.x - f.x) / (c0.x - f.x);
-      let sy = Math.abs(c0.y - f.y) < 1e-9 ? 1 : (sr.p.y - f.y) / (c0.y - f.y);
-      if (e.shift) {
+      const { f, c0, ax, ay } = scaleFrame(drag.box, drag.handle, e.meta);
+      let sx = !ax || Math.abs(c0.x - f.x) < 1e-9 ? 1 : (sr.p.x - f.x) / (c0.x - f.x);
+      let sy = !ay || Math.abs(c0.y - f.y) < 1e-9 ? 1 : (sr.p.y - f.y) / (c0.y - f.y);
+      if (e.shift && ax && ay) {
         const m = Math.max(Math.abs(sx), Math.abs(sy));
         sx = Math.sign(sx || 1) * m;
         sy = Math.sign(sy || 1) * m;
@@ -586,6 +644,16 @@ export function onPointerMove(e: PEvent) {
       return;
     }
     case "handle": {
+      // ⌘ pressed or let go mid-drag: carry on from the shape as it is now,
+      // so nothing jumps (the mirrored point stays where it got to).
+      if (e.meta !== drag.meta) {
+        const cur = store.objById(drag.id);
+        if (cur) {
+          drag.orig = cur;
+          if (cur.type === "curve") drag.handles = nodeHandles(cur);
+        }
+        drag.meta = e.meta;
+      }
       const o = drag.orig;
       if (o.type === "curve") {
         const j = Math.floor(drag.handle / 3);
@@ -624,13 +692,19 @@ export function onPointerMove(e: PEvent) {
         // ⌘: the mirror-image anchor moves too.
         const m = e.meta ? mirrorOf(o.nodes.map((n) => n.p), o.closed, j) : null;
         if (m) {
+          // The partner moves by the mirror image of how this one moved
+          // (exactly the mirror image when the shape was symmetric).
           const hs = drag.handles!;
-          const hin = next.mode === "manual" ? next.hin : hs[j].hin;
-          const hout = next.mode === "manual" ? next.hout : hs[j].hout;
-          const keepManual = next.mode === "manual" || o.nodes[m.partner].mode === "manual";
-          nodes[m.partner] = keepManual
-            ? { p: m.R(next.p), mode: "manual", hin: hout ? m.L(hout) : { x: 0, y: 0 }, hout: hin ? m.L(hin) : { x: 0, y: 0 } }
-            : { ...o.nodes[m.partner], p: m.R(next.p) };
+          const zero = { x: 0, y: 0 };
+          const pn = o.nodes[m.partner];
+          const p = add(pn.p, m.L(sub(next.p, node.p)));
+          if (k === 0) nodes[m.partner] = { ...pn, p };
+          else {
+            const ph = hs[m.partner];
+            const dIn = sub(next.mode === "manual" ? (next.hin ?? zero) : zero, hs[j].hin ?? zero);
+            const dOut = sub(next.mode === "manual" ? (next.hout ?? zero) : zero, hs[j].hout ?? zero);
+            nodes[m.partner] = { p, mode: "manual", hin: add(ph.hin ?? zero, m.L(dOut)), hout: add(ph.hout ?? zero, m.L(dIn)) };
+          }
         }
         store.preview(store.withReplaced([{ ...o, nodes }], drag.before));
         return;
@@ -640,7 +714,7 @@ export function onPointerMove(e: PEvent) {
         const sr = doSnap(e.world, e, { exclude: [o.id], from: drag.handle > 0 || o.closed ? prev : null });
         const pts = o.pts.map((p, i) => (i === drag.handle ? sr.p : p));
         const m = e.meta ? mirrorOf(o.pts, o.closed, drag.handle) : null;
-        if (m) pts[m.partner] = m.R(sr.p);
+        if (m) pts[m.partner] = add(o.pts[m.partner], m.L(sub(sr.p, o.pts[drag.handle])));
         store.set({ snap: sr });
         store.preview(store.withReplaced([{ ...o, pts }], drag.before));
       } else if (o.type === "ellipse") {
@@ -683,7 +757,14 @@ export function onPointerMove(e: PEvent) {
       preview = o ? [o] : [];
     }
     store.set({ snap: sr, preview });
-  } else if (s.snap) store.set({ snap: null });
+  } else {
+    if (s.snap) store.set({ snap: null });
+    const h = handleAt(e);
+    const hint = editTargets().length && !h ? (insertPointAt(e)?.p ?? null) : null;
+    if (hint || s.insertHint) store.set({ insertHint: hint });
+    const cur = handleCursor(h);
+    if (cur !== s.hoverCursor) store.set({ hoverCursor: cur });
+  }
 }
 
 export function onPointerUp(e: PEvent) {
@@ -702,7 +783,9 @@ export function onPointerUp(e: PEvent) {
       return;
     }
     case "scale":
+    case "rotate":
     case "handle":
+      if (d.kind === "rotate") store.set({ message: null });
       if (s.scene !== d.before) store.commit(s.scene, { snap: null }, d.before);
       else store.set({ snap: null });
       return;
@@ -727,6 +810,21 @@ export function onPointerUp(e: PEvent) {
       return;
     }
   }
+}
+
+/** For a box handle: the fixed point, the dragged point, and which axes it
+ *  scales. ⌘ scales about the centre (both sides move). */
+export function scaleFrame(b: Box, handle: number, centred: boolean): { f: Vec; c0: Vec; ax: boolean; ay: boolean } {
+  const xs = [b.minX, b.maxX];
+  const ys = [b.minY, b.maxY];
+  const cx = (b.minX + b.maxX) / 2;
+  const cy = (b.minY + b.maxY) / 2;
+  // [dragged x, dragged y] as -1 (min), 0 (middle), 1 (max)
+  const where: [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1], [0, -1], [1, 0], [0, 1], [-1, 0]];
+  const [wx, wy] = where[handle];
+  const c0 = { x: wx === 0 ? cx : xs[(wx + 1) / 2], y: wy === 0 ? cy : ys[(wy + 1) / 2] };
+  const f = centred ? { x: cx, y: cy } : { x: wx === 0 ? cx : xs[(1 - wx) / 2], y: wy === 0 ? cy : ys[(1 - wy) / 2] };
+  return { f, c0, ax: wx !== 0, ay: wy !== 0 };
 }
 
 /** Symmetric editing (⌘-drag): the partner of point i in an open chain is
@@ -769,12 +867,16 @@ export function onDoubleClick(e: PEvent) {
     while (cdraft.length >= 2 && dist(cdraft[cdraft.length - 1].p, cdraft[cdraft.length - 2].p) < 1e-9) cdraft.pop();
     return finishCurve(false);
   }
-  if (s.tool === "select" && s.pointEdit) {
-    const o = store.objById(s.pointEdit);
-    if (o && (o.type === "curve" || o.type === "path")) {
-      const h = handleAt(e);
-      if (h && h.kind === "anchor" && o.type === "curve") return toggleNodeMode(o, Math.floor(h.handle / 3));
-      if (!h && hitDistance(o, e.world, lbox) * s.view.zoom < 6) return insertNode(o, e.world);
+  if (s.tool === "select" && editTargets().length) {
+    const h = handleAt(e);
+    const ho = h && h.kind === "anchor" ? store.objById(h.id) : undefined;
+    if (ho && ho.type === "curve") return toggleNodeMode(ho, Math.floor(h!.handle / 3));
+    if (!h) {
+      const ins = insertPointAt(e);
+      if (ins) {
+        store.set({ insertHint: null });
+        return insertNode(ins.o, ins.p, true);
+      }
     }
   }
   if (s.tool === "polyline") {
@@ -791,6 +893,83 @@ export function onDoubleClick(e: PEvent) {
 
 // ---------------------------------------------------------------- point editing
 
+/** Objects whose points are being edited: the double-clicked one, or every
+ *  selected curve while "Control points" is on. */
+export function editTargets(): (PathObj | CurveObj)[] {
+  const s = store.get();
+  if (s.tool !== "select") return [];
+  if (s.pointEdit) {
+    const o = store.objById(s.pointEdit);
+    return o && (o.type === "path" || o.type === "curve") ? [o] : [];
+  }
+  return s.showControls ? store.selected().filter((o): o is CurveObj => o.type === "curve") : [];
+}
+
+/** Where a double-click would add a point: the nearest point on an edited
+ *  line, moved to where it crosses a grid line or another object's special
+ *  point when one is near (with snapping on). */
+export function insertPointAt(e: PEvent): { o: PathObj | CurveObj; p: Vec } | null {
+  const { view, settings } = store.get();
+  let best: { o: PathObj | CurveObj; pts: Vec[]; d: number } | null = null;
+  for (const o of editTargets()) {
+    const pts = o.type === "path" ? (o.closed ? [...o.pts, o.pts[0]] : o.pts) : sampleCurve(o, 64);
+    let d = Infinity;
+    for (let i = 0; i + 1 < pts.length; i++) d = Math.min(d, distToSeg(e.world, pts[i], pts[i + 1]));
+    if (d * view.zoom < HIT_PX && (!best || d < best.d)) best = { o, pts, d };
+  }
+  if (!best) return null;
+  const { pts } = best;
+  let q = e.world;
+  let qd = Infinity;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const c = closestOnSegment(e.world, pts[i], pts[i + 1]);
+    const d = dist(c, e.world);
+    if (d < qd) {
+      qd = d;
+      q = c;
+    }
+  }
+  if (e.alt) return { o: best.o, p: q };
+  const r = settings.snapRadiusPx / view.zoom;
+  const cands: Vec[] = [];
+  if (settings.snapToGrid) {
+    const g = visibleGrid(settings.gridSize, view.zoom);
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      if (dist(a, q) > r + dist(a, b)) continue;
+      for (const axis of ["x", "y"] as const) {
+        const lo = Math.min(a[axis], b[axis]);
+        const hi = Math.max(a[axis], b[axis]);
+        for (let k = Math.ceil(lo / g); k * g <= hi; k++) {
+          const v = k * g + 0;
+          const t = Math.abs(b[axis] - a[axis]) < 1e-12 ? 0 : (v - a[axis]) / (b[axis] - a[axis]);
+          const c = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+          c[axis] = v;
+          cands.push(c);
+        }
+      }
+    }
+  }
+  if (settings.snapToObjects) {
+    for (const c of snapIndex([best.o.id]).points) {
+      let d = Infinity;
+      for (let i = 0; i + 1 < pts.length; i++) d = Math.min(d, distToSeg(c.p, pts[i], pts[i + 1]));
+      if (d < 0.5 / view.zoom) cands.push(c.p);
+    }
+  }
+  let bd = r;
+  let p = q;
+  for (const c of cands) {
+    const d = dist(c, q);
+    if (d < bd) {
+      bd = d;
+      p = c;
+    }
+  }
+  return { o: best.o, p };
+}
+
 /** Double-click an anchor: smooth <-> corner (a manual anchor goes back to smooth). */
 function toggleNodeMode(o: CurveObj, j: number) {
   const n = o.nodes[j];
@@ -800,7 +979,7 @@ function toggleNodeMode(o: CurveObj, j: number) {
 }
 
 /** Double-click on a line/curve while editing points: add a point there. */
-function insertNode(o: PathObj | CurveObj, p: Vec) {
+function insertNode(o: PathObj | CurveObj, p: Vec, exact = false) {
   if (o.type === "path") {
     const segs = pathSegments(o);
     let best = -1;
@@ -816,7 +995,7 @@ function insertNode(o: PathObj | CurveObj, p: Vec) {
       }
     });
     if (best < 0) return;
-    const pts = [...o.pts.slice(0, best + 1), q, ...o.pts.slice(best + 1)];
+    const pts = [...o.pts.slice(0, best + 1), exact ? p : q, ...o.pts.slice(best + 1)];
     store.commit(store.withReplaced([{ ...o, pts }]), { activeNode: best + 1 });
     return;
   }
@@ -835,7 +1014,7 @@ function insertNode(o: PathObj | CurveObj, p: Vec) {
     }
   }
   const seg = Math.floor(bi / per);
-  const nodes = [...o.nodes.slice(0, seg + 1), { p: q, mode: "smooth" as const }, ...o.nodes.slice(seg + 1)];
+  const nodes = [...o.nodes.slice(0, seg + 1), { p: exact ? p : q, mode: "smooth" as const }, ...o.nodes.slice(seg + 1)];
   store.commit(store.withReplaced([{ ...o, nodes }]), { activeNode: seg + 1 });
 }
 

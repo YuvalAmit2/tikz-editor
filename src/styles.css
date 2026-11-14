@@ -156,6 +156,18 @@ button {
   border-top: 1px solid var(--line);
   pointer-events: none;
 }
+.statusbar .zoom,
+.statusbar .coords {
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+}
+/* Fixed widths so the text after them doesn't shift as the numbers change. */
+.statusbar .zoom {
+  min-width: 4ch;
+}
+.statusbar .coords {
+  min-width: 19ch;
+}
 .statusbar .grow {
   flex: 1;
 }

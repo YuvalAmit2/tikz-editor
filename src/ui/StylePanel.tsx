@@ -63,6 +63,7 @@ export function StylePanel() {
   const [fillBase, fillTint] = splitTint(st.fill);
   const curves = objs.filter((o) => o.type === "curve").length;
   const showControls = useStore((s) => s.showControls);
+  const editingCurve = useStore((s) => !!s.pointEdit && s.scene.objects.some((o) => o.id === s.pointEdit && o.type === "curve"));
 
   return (
     <div data-testid="style-panel">
@@ -151,7 +152,17 @@ export function StylePanel() {
       {curves > 0 && (
         <section>
           <label className="check-row" title="Show the anchors and handles of the selected curves">
-            <input type="checkbox" checked={showControls} onChange={(e) => store.set({ showControls: e.target.checked })} data-testid="show-controls" />
+            <input
+              type="checkbox"
+              checked={showControls || editingCurve}
+              onChange={(e) => {
+                // On: the same as double-clicking the curve (one curve) — edit its points.
+                const sel = store.selected().filter((o) => o.type === "curve");
+                const on = e.target.checked;
+                store.set({ showControls: on, pointEdit: on && sel.length === 1 ? sel[0].id : null, activeNode: null });
+              }}
+              data-testid="show-controls"
+            />
             <span>Control points</span>
           </label>
         </section>

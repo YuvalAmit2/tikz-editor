@@ -2,6 +2,22 @@
 
 Everything here is on the `overnight` branch (tikz-editor, and yalatex for the VS Code command). Each entry: what I decided, what I passed over, and why. Items marked **[review]** are the ones most worth a look. "Left for you" lists ideas I deliberately didn't build.
 
+## Round 3 (your feedback, 2026-11-14 afternoon)
+
+Tests: 50 unit, 29 browser, 5 desktop-app, all passing. Nothing is pushed.
+
+- **Snippets** match in any case (`fra` works like `FRA`), except straight after a backslash, and a lone lowercase letter offers nothing (so a one-letter label finished with Enter isn't turned into a snippet).
+- **Snap dot** is bigger (radius 4 with a white ring) so the pointer doesn't hide it.
+- **Text-width frame** no longer follows the drawing. It's centred where the figure was when it was opened (x = 0 for a new figure) [review: if you'd rather centre it on the drawing with a button, say so].
+- **Easier selecting:** a click within 10 px of a line picks it (was 6), and pressing inside the box around what's selected drags it, even on empty space inside an unfilled shape.
+- **Selection box handles:** the four edge middles scale one way only; the round knob above the box rotates about its centre (⇧ snaps to 15°, the angle shows in the status bar). Hovering a handle shows a matching cursor. ⌘ on any corner or edge scales about the centre, so both sides move.
+- **⌘-mirror:** the drag now carries on from the current shape whenever ⌘ is pressed or let go, so nothing jumps back. The mirrored point moves by the mirror image of how the dragged point moved (the same as before for a symmetric shape, and no jump for a lopsided one).
+- **Adding nodes:** while editing points, hovering near the line shows a dotted ring where a double-click would add a node. It snaps to where the line crosses a grid line, or to another object's special point. ⌥ turns that off.
+- **Control points** toggle now puts you in the same mode as double-clicking the curve (with one curve selected): the hint shows and a double-click on the line adds a node. With several curves selected, double-clicking any of them adds a node there.
+- **Status bar** zoom and coordinates have fixed widths, so nothing after them shifts.
+- **Grid:** lines are drawn (and snapped to) only when at least 12 px apart (was 8), so at 100% the 0.25 cm grid shows every 0.5 cm, and the fine lines come back from about 130%.
+- **Drawing a Bézier:** the anchors placed so far and the handle you're pulling out are shown while you drag.
+
 ## Round 2 (your feedback, night of 2026-11-15)
 
 **To try it:** restart `npm run app`. In yalatex, merge `overnight` again and run `yalatex vscode-extension` (extension 0.2.1: **Ctrl+⌘F**). Nothing is pushed. Tests at the end: 50 unit, 23 browser, 5 desktop-app, all passing.

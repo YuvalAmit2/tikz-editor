@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { zoomAt } from "../actions";
 import { getLabel, labelBox, labelImage, labelStore } from "../labels/render";
-import { ptToCm, sceneGeomBox, sub, len, type Box } from "../model/geometry";
+import { ptToCm, sub, len, type Box } from "../model/geometry";
 import type { Obj, Style, Vec } from "../model/types";
 import { xcolorCss } from "../model/xcolor";
 import { curvePathD, curveSegments } from "../model/curve";
 import {
+  editTargets,
   getHandles,
   isPanning,
   onDoubleClick,
@@ -84,6 +85,7 @@ export function Canvas() {
         height={size.h}
         data-testid="canvas"
         className={`canvas tool-${s.tool}${isPanning() ? " panning" : ""}`}
+        style={s.hoverCursor && s.tool === "select" && !isPanning() ? { cursor: s.hoverCursor } : undefined}
         onMouseDown={(e) => e.preventDefault()}
         onPointerDown={(e) => {
           e.preventDefault(); // keep keyboard focus where we put it (e.g. the label editor)
@@ -94,7 +96,7 @@ export function Canvas() {
         onPointerMove={(e) => onPointerMove(ev(e))}
         onPointerUp={(e) => onPointerUp(ev(e))}
         onDoubleClick={(e) => onDoubleClick(ev(e))}
-        onPointerLeave={() => store.set({ cursor: null })}
+        onPointerLeave={() => store.set({ cursor: null, insertHint: null })}
       >
         {s.settings.showGrid && <Grid size={size} z={z} tx={tx} ty={ty} grid={s.settings.gridSize} />}
         {s.settings.showTextWidthGuide && <TextWidthGuide size={size} z={z} tx={tx} widthCm={s.settings.textWidthCm} />}
@@ -114,6 +116,7 @@ export function Canvas() {
         <SelectionOverlay toScreen={toScreen} multi={s.selection.length > 1} />
         {s.marquee && <MarqueeRect b={s.marquee} toScreen={toScreen} />}
         {showSnap && s.snap && <SnapMark p={toScreen(s.snap.p)} kind={s.snap.kind} />}
+        {s.insertHint && editTargets().length > 0 && <InsertHint p={toScreen(s.insertHint)} />}
       </svg>
       <StatusBar />
     </div>
@@ -285,19 +288,24 @@ function SelectionOverlay({ toScreen, multi }: { toScreen: (p: Vec) => Vec; mult
   const editObj = useStore((s) => (s.pointEdit ? s.scene.objects.find((o) => o.id === s.pointEdit) : undefined));
   useStore((s) => s.scene);
   useStore((s) => s.selection);
+  useStore((s) => s.preview);
   const handles = getHandles();
-  const b = multi ? selectionBox() : null;
+  // The box is drawn whenever it has handles (a single object too: the rotate
+  // knob and edge handles sit on it).
+  const b = multi || handles.some((h) => h.kind === "box") ? selectionBox() : null;
   return (
     <g pointerEvents="none">
       {b && <MarqueeRect b={b} toScreen={toScreen} dashed />}
       {handles.map((h, i) => {
-        if (h.kind !== "control" || !h.from) return null;
+        if ((h.kind !== "control" && h.kind !== "rotate") || !h.from) return null;
         const p = toScreen(h.p);
         const a = toScreen(h.from);
         return <line key={"l" + i} x1={a.x} y1={a.y} x2={p.x} y2={p.y} stroke={SEL} strokeWidth={1} opacity={0.6} />;
       })}
       {handles.map((h, i) => {
         const p = toScreen(h.p);
+        if (h.kind === "rotate") return <circle key={i} cx={p.x} cy={p.y} r={4.5} fill="white" stroke={SEL} strokeWidth={1.5} data-testid="rotate-handle" />;
+        if (h.kind === "edge") return <rect key={i} x={p.x - 3.5} y={p.y - 3.5} width={7} height={7} fill="white" stroke={SEL} strokeWidth={1.5} data-testid="edge-handle" />;
         if (h.kind === "control") return <rect key={i} x={p.x - 3.5} y={p.y - 3.5} width={7} height={7} fill={SEL} stroke="white" strokeWidth={1} transform={`rotate(45 ${p.x} ${p.y})`} data-testid="control-handle" />;
         const obj = h.id === editObj?.id ? editObj : h.id ? store.objById(h.id) : undefined;
         const nodeIndex = obj?.type === "curve" ? Math.floor(h.handle / 3) : h.handle;
@@ -335,8 +343,19 @@ function MarqueeRect({ b, toScreen, dashed }: { b: Box; toScreen: (p: Vec) => Ve
   );
 }
 
+/** Where a double-click adds a point. */
+function InsertHint({ p }: { p: Vec }) {
+  return (
+    <g pointerEvents="none" data-testid="insert-hint">
+      <circle cx={p.x} cy={p.y} r={4.5} fill="white" stroke={SEL} strokeWidth={1.5} strokeDasharray="2 1.5" />
+      <circle cx={p.x} cy={p.y} r={1.5} fill={SEL} />
+    </g>
+  );
+}
+
 function SnapMark({ p, kind }: { p: Vec; kind: string }) {
-  if (kind === "grid" || kind === "angle") return <circle cx={p.x} cy={p.y} r={2.5} fill={SEL} pointerEvents="none" />;
+  // Big enough to show around the tip of the mouse pointer.
+  if (kind === "grid" || kind === "angle") return <circle cx={p.x} cy={p.y} r={4} fill={SEL} stroke="white" strokeWidth={1.5} pointerEvents="none" data-testid="snap-dot" />;
   return (
     <g pointerEvents="none">
       <rect x={p.x - 5} y={p.y - 5} width={10} height={10} fill="none" stroke="#e8590c" strokeWidth={1.5} transform={kind === "intersection" ? `rotate(45 ${p.x} ${p.y})` : undefined} />
@@ -367,9 +386,8 @@ function Grid({ size, z, tx, ty, grid }: { size: { w: number; h: number }; z: nu
 }
 
 function TextWidthGuide({ size, z, tx, widthCm }: { size: { w: number; h: number }; z: number; tx: number; widthCm: number }) {
-  const scene = useStore((s) => s.scene);
-  const b = sceneGeomBox(scene.objects);
-  const cx = b ? (b.minX + b.maxX) / 2 : 0;
+  // Fixed while you draw (set when the figure is opened).
+  const cx = useStore((s) => s.guideCx);
   const xs = [cx - widthCm / 2, cx + widthCm / 2].map((x) => x * z + tx);
   return (
     <g pointerEvents="none">
@@ -389,9 +407,9 @@ function StatusBar() {
   const snap = useStore((s) => s.snap);
   const message = useStore((s) => s.message);
   const tool = useStore((s) => s.tool);
-  const pointEdit = useStore((s) => s.pointEdit);
+  const editing = useStore((s) => !!s.pointEdit || (s.showControls && s.tool === "select" && s.scene.objects.some((o) => o.type === "curve" && s.selection.includes(o.id))));
   const hint =
-    pointEdit
+    editing
       ? "Double-click the line to add a point · ⌫ deletes one · ⌘-drag mirrors"
       : tool === "polyline" || tool === "curve"
         ? "↵ to finish · click the first point to close"
@@ -402,12 +420,8 @@ function StatusBar() {
           : "⇧ constrains · ⌥ turns off snapping";
   return (
     <div className="statusbar">
-      <span>{Math.round((zoom / (96 / 2.54)) * 100)}%</span>
-      {cursor && (
-        <span>
-          ({cursor.x.toFixed(2)}, {cursor.y.toFixed(2)}) cm
-        </span>
-      )}
+      <span className="zoom">{Math.round((zoom / (96 / 2.54)) * 100)}%</span>
+      <span className="coords" data-testid="coords">{cursor ? `(${cursor.x.toFixed(2)}, ${cursor.y.toFixed(2)}) cm` : ""}</span>
       {snap && snap.kind !== "none" && <span className="muted">snap: {snap.kind}</span>}
       <span className="muted grow">{hint}</span>
       {message && <span className="message">{message}</span>}
