@@ -16,6 +16,7 @@ import {
   type PEvent,
 } from "../tools/controller";
 import { store, useStore } from "../store";
+import { visibleGrid } from "../model/snap";
 
 const SEL = "#2f6fed";
 
@@ -298,10 +299,11 @@ function SelectionOverlay({ toScreen, multi }: { toScreen: (p: Vec) => Vec; mult
       {handles.map((h, i) => {
         const p = toScreen(h.p);
         if (h.kind === "control") return <rect key={i} x={p.x - 3.5} y={p.y - 3.5} width={7} height={7} fill={SEL} stroke="white" strokeWidth={1} transform={`rotate(45 ${p.x} ${p.y})`} data-testid="control-handle" />;
-        const nodeIndex = editObj?.type === "curve" ? Math.floor(h.handle / 3) : h.handle;
-        const active = activeNode === nodeIndex && editObj?.type !== "ellipse";
-        const corner = editObj?.type === "curve" && editObj.nodes[nodeIndex]?.mode === "corner";
-        return pointEdit ? (
+        const obj = h.id === editObj?.id ? editObj : h.id ? store.objById(h.id) : undefined;
+        const nodeIndex = obj?.type === "curve" ? Math.floor(h.handle / 3) : h.handle;
+        const active = !!pointEdit && activeNode === nodeIndex && obj?.type !== "ellipse";
+        const corner = obj?.type === "curve" && obj.nodes[nodeIndex]?.mode === "corner";
+        return h.kind === "anchor" ? (
           corner ? (
             <rect key={i} x={p.x - 4} y={p.y - 4} width={8} height={8} fill={active ? SEL : "white"} stroke={SEL} strokeWidth={1.5} data-testid="vertex-handle" />
           ) : (
@@ -346,8 +348,7 @@ function SnapMark({ p, kind }: { p: Vec; kind: string }) {
 }
 
 function Grid({ size, z, tx, ty, grid }: { size: { w: number; h: number }; z: number; tx: number; ty: number; grid: number }) {
-  let g = grid;
-  while (g * z < 8) g *= 2;
+  const g = visibleGrid(grid, z);
   const lines: React.ReactElement[] = [];
   const x0 = Math.floor(-tx / z / g) * g;
   const x1 = (size.w - tx) / z;
@@ -391,10 +392,12 @@ function StatusBar() {
   const pointEdit = useStore((s) => s.pointEdit);
   const hint =
     pointEdit
-      ? "Double-click the line to add a point · ⌫ deletes one"
+      ? "Double-click the line to add a point · ⌫ deletes one · ⌘-drag mirrors"
       : tool === "polyline" || tool === "curve"
         ? "↵ to finish · click the first point to close"
-        : tool === "select" || tool === "sketch" || tool === "text" || tool === "point"
+        : tool === "trim"
+          ? "Click a piece to cut it away, or drag across pieces"
+          : tool === "select" || tool === "sketch" || tool === "text" || tool === "point"
           ? ""
           : "⇧ constrains · ⌥ turns off snapping";
   return (

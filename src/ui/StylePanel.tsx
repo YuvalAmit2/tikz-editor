@@ -1,8 +1,8 @@
-import { applyProps, applyStyle, deleteSelection, saveSettings } from "../actions";
+import { applyProps, applyStyle, deleteSelection, saveSettings, smartLabel } from "../actions";
 import { saveSelectionToLibrary } from "../library";
-import { ANCHORS, LINE_WIDTHS, type Anchor, type FontSize, type Obj, type Style } from "../model/types";
+import { FONT_SIZES, LINE_WIDTHS, type Obj, type Style } from "../model/types";
 import { PALETTE, TINTS, xcolorCss } from "../model/xcolor";
-import { askText, useStore } from "../store";
+import { askText, store, useStore } from "../store";
 
 /** "blue!30" -> ["blue", 30]; "green!60!black" -> ["green!60!black", 100] */
 function splitTint(c: string | null): [string | null, number] {
@@ -61,6 +61,8 @@ export function StylePanel() {
   const labels = objs.filter((o): o is Extract<Obj, { type: "label" }> => o.type === "label");
   const points = objs.filter((o): o is Extract<Obj, { type: "point" }> => o.type === "point");
   const [fillBase, fillTint] = splitTint(st.fill);
+  const curves = objs.filter((o) => o.type === "curve").length;
+  const showControls = useStore((s) => s.showControls);
 
   return (
     <div data-testid="style-panel">
@@ -132,30 +134,27 @@ export function StylePanel() {
       )}
 
       {labels.length > 0 && (
-        <>
-          <section>
-            <h4>Size</h4>
-            <Seg
-              value={labels[0].font}
-              onPick={(font) => applyProps({ font } as Partial<Obj>, (o) => o.type === "label")}
-              options={(["\\scriptsize", "\\footnotesize", "\\small", "", "\\large"] as FontSize[]).map((f, i) => ({
-                v: f,
-                label: <span style={{ fontFamily: "Georgia, serif", fontSize: [9.5, 11, 12.5, 14, 16.5][i] }}>A</span>,
-                title: f || "\\normalsize",
-              }))}
-            />
-          </section>
-          <section>
-            <h4>Anchor</h4>
-            <div className="anchors" title="Which point of the label sits at its position">
-              {ANCHORS.map((a) => (
-                <button key={a} className={labels[0].anchor === a ? "active" : ""} title={a} onClick={() => applyProps({ anchor: a as Anchor } as Partial<Obj>, (o) => o.type === "label")}>
-                  <span />
-                </button>
-              ))}
-            </div>
-          </section>
-        </>
+        <section>
+          <h4>Size</h4>
+          <Seg
+            value={labels[0].font}
+            onPick={(font) => applyProps({ font } as Partial<Obj>, (o) => o.type === "label")}
+            options={FONT_SIZES.map((f, i) => ({
+              v: f,
+              label: <span style={{ fontFamily: "Georgia, serif", fontSize: [9, 10.5, 12, 13.5, 15, 17, 19.5][i] }}>A</span>,
+              title: f || "\\normalsize (the document's size)",
+            }))}
+          />
+        </section>
+      )}
+
+      {curves > 0 && (
+        <section>
+          <label className="check-row" title="Show the anchors and handles of the selected curves">
+            <input type="checkbox" checked={showControls} onChange={(e) => store.set({ showControls: e.target.checked })} data-testid="show-controls" />
+            <span>Control points</span>
+          </label>
+        </section>
       )}
 
       <Presets current={st} />
@@ -164,6 +163,11 @@ export function StylePanel() {
 
       {objs.length > 0 && (
         <section className="panel-actions">
+          {!onlyLabels && (
+            <button className="text-btn" onClick={smartLabel} title="Add a label next to this (⇧T)" data-testid="smart-label">
+              Label
+            </button>
+          )}
           <button className="text-btn" onClick={saveSelectionToLibrary} title="Keep this in the figure library">
             Add to library
           </button>

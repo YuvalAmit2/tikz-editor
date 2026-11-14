@@ -8,6 +8,13 @@
 %   \tikzfig[height=3cm]{name}
 %   \tikzfig[scale=1.5]{name}
 %   \tikzfig[dir=figures/]{name}      look in another folder
+%   \tikzfig[caption={A torus}, label=fig:torus]{name}
+%                                     a figure (float) with a caption
+%   \tikzfig[place=h, caption=...]{name}   where the float goes (default htbp)
+%   \tikzfig[inline]{name}            don't centre
+%
+% On a line of its own, the figure is centred. In running text (or with
+% "inline") it sits in the line like a letter.
 %
 % Sizes scale the drawing only: labels keep the document's font size and
 % lines keep their thickness. width/height measure the drawing without its
@@ -27,6 +34,10 @@
   height/.store in=\tikzfig@height,
   scale/.store in=\tikzfig@scale,
   dir/.store in=\tikzfig@dir,
+  caption/.store in=\tikzfig@caption,
+  label/.store in=\tikzfig@label,
+  place/.store in=\tikzfig@place,
+  inline/.code=\def\tikzfig@inline{1},
 }
 
 \ExplSyntaxOn
@@ -38,9 +49,13 @@
         \tl_if_in:nnTF {#1} {=}
           { \pgfkeys{/tikzfig/.cd,#1} }
           {
+          \tl_if_in:nnTF {#1} {inline}
+          { \pgfkeys{/tikzfig/.cd,#1} }
+          {
             \regex_match:nnTF { \A \s* [+\-]? (\d+\.?\d* | \.\d+) \s* \Z } {#1}
               { \def\tikzfig@width{#1\linewidth} }
               { \def\tikzfig@width{#1} }
+          }
           }
       }
   }
@@ -49,12 +64,45 @@
 \NewDocumentCommand\tikzfig{O{}m}{%
   \begingroup
   \def\tikzfig@width{}\def\tikzfig@height{}\def\tikzfig@scale{1}%
+  \def\tikzfig@caption{}\def\tikzfig@label{}\def\tikzfig@place{htbp}%
+  \def\tikzfig@inline{0}%
   \let\tikzfig@dir\tikzfigdir
   \tikzfig@options{#1}%
+  \def\tikzfig@name{#2}%
+  \ifx\tikzfig@caption\@empty
+    \ifnum\tikzfig@inline=0 \ifvmode
+      % A line of its own: centred (just \centering inside a float).
+      \ifx\@captype\@undefined
+        \begin{center}\tikzfig@picture\tikzfig@dolabel\end{center}%
+      \else
+        {\centering\tikzfig@picture\tikzfig@dolabel\par}%
+      \fi
+    \else \tikzfig@picture\tikzfig@dolabel \fi
+    \else \tikzfig@picture\tikzfig@dolabel \fi
+  \else
+    \ifx\@captype\@undefined
+      \tikzfig@float
+    \else
+      % Already in a figure: caption it, don't nest another float.
+      {\centering\tikzfig@picture\par}\caption{\tikzfig@caption}\tikzfig@dolabel
+    \fi
+  \fi
+  \endgroup
+}
+\def\tikzfig@dolabel{\ifx\tikzfig@label\@empty\else\label{\tikzfig@label}\fi}
+\def\tikzfig@picture{%
+  \begingroup
   % No end-of-line spaces from the .tikz file around the picture
   \endlinechar=-1\relax
-  \input{\tikzfig@dir#2.tikz}%
+  \input{\tikzfig@dir\tikzfig@name.tikz}%
   \endgroup
+}
+\def\tikzfig@float{%
+  \edef\tikzfig@begin{\noexpand\begin{figure}[\tikzfig@place]}%
+  \tikzfig@begin
+  \centering\tikzfig@picture
+  \caption{\tikzfig@caption}\tikzfig@dolabel
+  \end{figure}%
 }
 
 % #1, #2: natural width and height of the drawing in cm (written by the editor).

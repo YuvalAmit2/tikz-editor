@@ -26,8 +26,10 @@ import {
 import { call } from "../api/client";
 import { DEFAULT_SNIPPET_FILE, withDefaults, type Settings } from "../model/settings";
 import { loadSnippets } from "./snippets";
+import { initSmartLabels } from "../smartLabels";
 import { LINE_WIDTHS } from "../model/types";
-import { cancelDraft, deleteActiveNode, finishCurve, finishPolyline, hasDraft, removeLastDraftPoint, setSpaceDown } from "../tools/controller";
+import { cancelDraft, deleteActiveNode, finishCurve, finishPolyline, hasDraft, removeLastDraftPoint, setSpaceDown, spaceWasUsed } from "../tools/controller";
+import { smartLabel, toggleDash, toggleGridSnap } from "../actions";
 import { store, useStore } from "../store";
 import { Canvas } from "./Canvas";
 import { SettingsDialog } from "./SettingsDialog";
@@ -75,7 +77,8 @@ function onKeyDown(e: KeyboardEvent) {
   }
 
   if (e.key === " ") {
-    setSpaceDown(true);
+    // Hold to pan; a tap switches to Select.
+    if (!e.repeat) setSpaceDown(true);
     e.preventDefault();
     return;
   }
@@ -102,7 +105,8 @@ function onKeyDown(e: KeyboardEvent) {
   }
   if (e.key.startsWith("Arrow")) {
     e.preventDefault();
-    const step = s.settings.gridSize * (e.shiftKey ? 4 : 1);
+    // ⇧ ×4, ⌥ fine (a fifth of a grid step)
+    const step = s.settings.gridSize * (e.shiftKey ? 4 : 1) * (e.altKey ? 0.2 : 1);
     const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key]!;
     return nudge(d[0], d[1]);
   }
@@ -110,6 +114,7 @@ function onKeyDown(e: KeyboardEvent) {
     if (k === "h") return flipH();
     if (k === "v") return flipV();
     if (k === "r") return rotate90(1);
+    if (k === "t") return smartLabel();
     if (e.key === "!") return zoomToFit(canvasSize());
     return;
   }
@@ -122,6 +127,9 @@ function onKeyDown(e: KeyboardEvent) {
     }
     return;
   }
+  if (e.key === "-") return toggleDash("dashed");
+  if (e.key === ".") return toggleDash("dotted");
+  if (k === "g") return toggleGridSnap();
   // 1-7: line thickness
   if (/^[1-7]$/.test(e.key)) return applyStyle({ width: LINE_WIDTHS[parseInt(e.key) - 1].pt });
   const t = TOOLS.find((t) => toolKey(t).toLowerCase() === k);
@@ -129,7 +137,9 @@ function onKeyDown(e: KeyboardEvent) {
 }
 
 function onKeyUp(e: KeyboardEvent) {
-  if (e.key === " ") setSpaceDown(false);
+  if (e.key !== " ") return;
+  setSpaceDown(false);
+  if (!spaceWasUsed() && !isTyping(e) && !store.get().showSettings) setTool("select");
 }
 
 export function App() {
@@ -142,6 +152,7 @@ export function App() {
       if ((e.target as HTMLElement).closest?.("button")) e.preventDefault();
     };
     window.addEventListener("mousedown", noButtonFocus);
+    initSmartLabels();
     (async () => {
       store.set({ settings: withDefaults(await call<Settings>("getSettings")) });
       // Ready before the first label (read again whenever a label edit starts).

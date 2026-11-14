@@ -1,4 +1,4 @@
-import { flipH, flipV, newFigure, open, rotate90, save, setTool } from "../actions";
+import { copyTikz, flipH, flipV, newFigure, open, rotate90, save, setTool, toggleGridSnap } from "../actions";
 import { store, useStore, type ToolName } from "../store";
 
 const I = ({ children }: { children: React.ReactNode }) => (
@@ -18,7 +18,18 @@ export const TOOLS: { tool: ToolName; key: string; label: string; icon: React.Re
   { tool: "ellipse", key: "E", label: "Ellipse", icon: <I><ellipse cx="10" cy="10" rx="7.5" ry="4.5" /></I> },
   { tool: "point", key: "D", label: "Point (dot)", icon: <I><circle cx="10" cy="10" r="2.5" fill="currentColor" /></I> },
   { tool: "text", key: "T", label: "Text / math label", icon: <I><path d="M5 5h10M10 5v11" /></I> },
+  { tool: "trim", key: "X", label: "Trim: click a piece, or drag across pieces, to cut it away at the crossings", icon: <I><circle cx="6" cy="14" r="2.3" /><circle cx="14" cy="14" r="2.3" /><path d="M7.5 12.3L15 3M12.5 12.3L5 3" /></I> },
 ];
+
+/** A toolbar button with its shortcut written under it. */
+function Btn({ k, title, active, disabled, onClick, children, testid }: { k?: string; title: string; active?: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode; testid?: string }) {
+  return (
+    <button className={"tool" + (active ? " active" : "")} title={title} disabled={disabled} onClick={onClick} data-testid={testid}>
+      {children}
+      {k && <span className="key">{k}</span>}
+    </button>
+  );
+}
 
 /** The key for a tool: settings.toolKeys can change the defaults. */
 export function toolKey(t: { tool: ToolName; key: string }): string {
@@ -30,6 +41,7 @@ export function Toolbar() {
   const filePath = useStore((s) => s.filePath);
   const dirty = useStore((s) => s.dirty);
   const hasSel = useStore((s) => s.selection.length > 0);
+  const snapGrid = useStore((s) => s.settings.snapToGrid);
   const name = filePath ? filePath.split(/[\\/]/).pop() : "Untitled";
   return (
     <div className="toolbar">
@@ -37,37 +49,38 @@ export function Toolbar() {
         {TOOLS.map((t, i) => (
           <span key={t.tool} className="tool-slot">
           {(i === 1 || t.tool === "rect" || t.tool === "text") && <span className="mini-sep" />}
-          <button
-            className={"tool" + (tool === t.tool ? " active" : "")}
-            title={`${t.label} (${toolKey(t)})`}
-            data-testid={`tool-${t.tool}`}
-            onClick={() => setTool(t.tool)}
-          >
+          <Btn k={t.tool === "select" ? "␣" : toolKey(t)} active={tool === t.tool} title={`${t.label} (${t.tool === "select" ? "Space or " : ""}${toolKey(t)})`} testid={`tool-${t.tool}`} onClick={() => setTool(t.tool)}>
             {t.icon}
-          </button>
+          </Btn>
           </span>
         ))}
       </div>
       <div className="sep" />
       <div className="group">
-        <button className="tool" title="Undo (⌘Z)" onClick={() => store.undo()}>
+        <Btn k="⌘Z" title="Undo (⌘Z)" onClick={() => store.undo()}>
           <I><path d="M7 5L3.5 8.5 7 12" /><path d="M4 8.5h7a4.5 4.5 0 010 9H8" /></I>
-        </button>
-        <button className="tool" title="Redo (⇧⌘Z)" onClick={() => store.redo()}>
+        </Btn>
+        <Btn k="⇧⌘Z" title="Redo (⇧⌘Z)" onClick={() => store.redo()}>
           <I><path d="M13 5l3.5 3.5L13 12" /><path d="M16 8.5H9a4.5 4.5 0 000 9h3" /></I>
-        </button>
+        </Btn>
       </div>
       <div className="sep" />
       <div className="group">
-        <button className="tool" disabled={!hasSel} title="Flip horizontally (⇧H)" onClick={flipH}>
+        <Btn k="⇧H" disabled={!hasSel} title="Flip horizontally (⇧H)" onClick={flipH}>
           <I><path d="M10 3v14" strokeDasharray="2 2" /><path d="M8 6L3 14h5zM12 6l5 8h-5z" /></I>
-        </button>
-        <button className="tool" disabled={!hasSel} title="Flip vertically (⇧V)" onClick={flipV}>
+        </Btn>
+        <Btn k="⇧V" disabled={!hasSel} title="Flip vertically (⇧V)" onClick={flipV}>
           <I><path d="M3 10h14" strokeDasharray="2 2" /><path d="M6 8L14 3v5zM6 12l8 5v-5z" /></I>
-        </button>
-        <button className="tool" disabled={!hasSel} title="Rotate 90° counter-clockwise (⇧R)" onClick={() => rotate90(1)}>
+        </Btn>
+        <Btn k="⇧R" disabled={!hasSel} title="Rotate 90° counter-clockwise (⇧R)" onClick={() => rotate90(1)}>
           <I><path d="M15 9a5 5 0 10-1.5 4.5" /><path d="M15 4v5h-5" /></I>
-        </button>
+        </Btn>
+      </div>
+      <div className="sep" />
+      <div className="group">
+        <Btn k="G" active={snapGrid} title="Snap to grid (G)" testid="grid-snap" onClick={toggleGridSnap}>
+          <I><path d="M3 7h14M3 13h14M7 3v14M13 3v14" strokeWidth="1.1" /><circle cx="13" cy="7" r="2" fill="currentColor" stroke="none" /></I>
+        </Btn>
       </div>
       <div className="spacer" />
       <div className="filename" title={filePath ?? "Not saved yet"}>
@@ -78,12 +91,16 @@ export function Toolbar() {
         <button className="text-btn" title="New figure (⌘N)" onClick={newFigure}>New</button>
         <button className="text-btn" title="Open (⌘O)" onClick={open}>Open</button>
         <button className="text-btn primary" title="Save (⌘S)" onClick={() => save()}>Save</button>
-        <button className="tool" title="Commands (⌘K)" onClick={() => store.set({ palette: true })}>
-          <I><circle cx="9" cy="9" r="5" /><path d="M13 13l4 4" /></I>
-        </button>
-        <button className="tool" title="Settings (⌘,)" data-testid="open-settings" onClick={() => store.set({ showSettings: true })}>
-          <I><circle cx="10" cy="10" r="2.5" /><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4" /></I>
-        </button>
+        <button className="text-btn" title="Copy the TikZ code" data-testid="copy-tikz" onClick={copyTikz}>Copy</button>
+        <Btn k="⌘K" title="Commands (⌘K)" onClick={() => store.set({ palette: true })}>
+          <span className="glyph">⌘</span>
+        </Btn>
+        <Btn k="⌘," title="Settings (⌘,)" testid="open-settings" onClick={() => store.set({ showSettings: true })}>
+          <I>
+            <path d="M8.6 2.5h2.8l.4 2.1 1.5.9 2-.8 1.4 2.4-1.6 1.4v1.8l1.6 1.4-1.4 2.4-2-.8-1.5.9-.4 2.1H8.6l-.4-2.1-1.5-.9-2 .8-1.4-2.4 1.6-1.4V9.1L3.3 7.7l1.4-2.4 2 .8 1.5-.9z" />
+            <circle cx="10" cy="10" r="2.4" />
+          </I>
+        </Btn>
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, type Settings } from "./model/settings";
 import type { SnapResult } from "./model/snap";
 import { DEFAULT_STYLE, emptyScene, type Obj, type Scene, type Style } from "./model/types";
 
-export type ToolName = "select" | "line" | "polyline" | "curve" | "sketch" | "rect" | "circle" | "ellipse" | "point" | "text";
+export type ToolName = "select" | "line" | "polyline" | "curve" | "sketch" | "rect" | "circle" | "ellipse" | "point" | "text" | "trim";
 
 export interface View {
   /** World point (cm) at the centre of the canvas. */
@@ -47,6 +47,8 @@ export interface AppState {
   palette: boolean;
   /** What the right-hand panel shows. */
   side: "style" | "library";
+  /** Show (and allow dragging) the anchors and handles of selected curves. */
+  showControls: boolean;
 }
 
 type Listener = () => void;
@@ -73,6 +75,7 @@ class Store {
     prompt: null,
     palette: false,
     side: "style",
+    showControls: false,
   };
   private listeners = new Set<Listener>();
   private undoStack: Scene[] = [];

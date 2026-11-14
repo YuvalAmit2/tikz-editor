@@ -44,7 +44,7 @@ button {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 46px;
+  height: 50px;
   padding: 0 10px;
   border-bottom: 1px solid var(--line);
   background: var(--chrome);
@@ -72,10 +72,14 @@ button {
   margin-right: 8px;
 }
 .tool {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 32px;
+  height: 40px;
+  padding: 0 3px;
   border: none;
   background: transparent;
   border-radius: 7px;
@@ -406,6 +410,12 @@ button {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 18px;
+  /* Always visible at the bottom of a long dialog */
+  position: sticky;
+  bottom: -18px;
+  margin-bottom: -18px;
+  padding: 10px 0 18px;
+  background: white;
 }
 
 .slider-row {
@@ -649,4 +659,24 @@ button {
   height: 16px;
   background: var(--line);
   margin: 0 4px;
+}
+
+/* Shortcut written under a toolbar button */
+.tool .key {
+  font-size: 9.5px;
+  line-height: 1;
+  color: #8a909c;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.tool.active .key {
+  color: var(--accent);
+}
+.tool .glyph {
+  font-size: 17px;
+  line-height: 20px;
+  height: 20px;
+}
+.canvas.tool-trim {
+  cursor: crosshair;
 }

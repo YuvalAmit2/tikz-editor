@@ -212,7 +212,7 @@ test("library: add a selection, insert it, delete it", async ({ page }) => {
   await expect(page.getByTestId("library-item")).toHaveCount(0);
 });
 
-test("restyling a selection leaves the new-object style alone; presets apply with ⌥1", async ({ page }) => {
+test("restyling a selection also sets the new-object style; presets apply with ⌥1", async ({ page }) => {
   await setup(page);
   await page.keyboard.press("l");
   await page.mouse.click(...(await at(page, 0, 0)));
@@ -223,13 +223,16 @@ test("restyling a selection leaves the new-object style alone; presets apply wit
   const o = (await objs(page))[0];
   expect(o.style.stroke).toBe("red");
   expect(o.style.width).toBe(0.8);
-  expect((await st(page)).style.stroke).toBe("black");
-  expect((await st(page)).style.width).toBe(0.4);
+  expect((await st(page)).style.stroke).toBe("red");
+  expect((await st(page)).style.width).toBe(0.8);
   // Save the red style as a preset, then apply it to a new line with ⌥1
   await page.getByTestId("preset-add").click();
   await page.getByTestId("prompt").locator("input").fill("red thick");
   await page.keyboard.press("Enter");
   await page.keyboard.press("Escape");
+  // Nothing selected: back to black for new objects
+  await page.getByTestId("stroke-swatches").locator('button[title="black"]').click();
+  await page.keyboard.press("3");
   await page.keyboard.press("l");
   await page.mouse.click(...(await at(page, 0, 1)));
   await page.mouse.click(...(await at(page, 2, 1)));

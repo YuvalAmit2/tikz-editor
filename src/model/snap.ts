@@ -99,6 +99,10 @@ export interface SnapOptions {
   /** Snap radius in cm (screen radius / zoom). */
   radius: number;
   gridSize: number;
+  /** Screen pixels per cm. When given, each coordinate snaps to the nearest
+   *  visible grid line only when close to it ("magnetic" grid lines), so you
+   *  can slide along a grid line. Without it, points snap to the nearest grid point. */
+  gridPx?: number;
   snapToGrid: boolean;
   snapToObjects: boolean;
   /** Shift held: constrain the direction from `from` to multiples of 15°. */
@@ -110,6 +114,25 @@ export interface SnapOptions {
 export function snapGrid(p: Vec, g: number): Vec {
   // "+ 0" turns -0 into 0
   return { x: Math.round(p.x / g) * g + 0, y: Math.round(p.y / g) * g + 0 };
+}
+
+/** The grid spacing actually drawn at this zoom (doubled until ≥ 8 px). */
+export function visibleGrid(gridSize: number, pxPerCm: number): number {
+  let g = gridSize;
+  while (g * pxPerCm < 8) g *= 2;
+  return g;
+}
+
+/** Each coordinate sticks to a grid line when it's within a band around it. */
+export function snapGridLines(p: Vec, gridSize: number, pxPerCm: number, radius: number): SnapResult {
+  const g = visibleGrid(gridSize, pxPerCm);
+  const band = Math.min(radius * 0.6, g * 0.25);
+  const gx = Math.round(p.x / g) * g + 0;
+  const gy = Math.round(p.y / g) * g + 0;
+  const sx = Math.abs(p.x - gx) <= band;
+  const sy = Math.abs(p.y - gy) <= band;
+  if (!sx && !sy) return { p, kind: "none" };
+  return { p: { x: sx ? gx : p.x, y: sy ? gy : p.y }, kind: "grid" };
 }
 
 export function snap(p: Vec, index: SnapIndex | null, o: SnapOptions): SnapResult {
@@ -172,6 +195,7 @@ export function snap(p: Vec, index: SnapIndex | null, o: SnapOptions): SnapResul
     if (bestOn) return { p: bestOn, kind: "on-object" };
   }
 
+  if (o.snapToGrid && o.gridPx) return snapGridLines(p, o.gridSize, o.gridPx, o.radius);
   if (o.snapToGrid) return { p: snapGrid(p, o.gridSize), kind: "grid" };
   return { p, kind: "none" };
 }

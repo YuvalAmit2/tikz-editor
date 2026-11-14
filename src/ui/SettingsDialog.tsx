@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { saveSettings } from "../actions";
 import { DEFAULT_SNIPPET_FILE, type Settings } from "../model/settings";
 import { store, useStore } from "../store";
@@ -14,6 +14,23 @@ function Dialog({ initial }: { initial: Settings }) {
   const [s, setS] = useState(initial);
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setS({ ...s, [k]: v });
   const close = () => store.set({ showSettings: false });
+  const latest = useRef(s);
+  latest.current = s;
+  const saveAndClose = async () => {
+    await saveSettings(latest.current);
+    close();
+  };
+  // Esc closes and keeps the changes (like closing a settings window).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      void saveAndClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
   const bool = (k: keyof Settings, label: string, hint?: string) => (
     <label className="row check">
       <input type="checkbox" checked={s[k] as boolean} onChange={(e) => set(k, e.target.checked as never)} />
@@ -24,7 +41,7 @@ function Dialog({ initial }: { initial: Settings }) {
     </label>
   );
   return (
-    <div className="modal-back" onMouseDown={close}>
+    <div className="modal-back" onMouseDown={() => void saveAndClose()}>
       <div className="modal" onMouseDown={(e) => e.stopPropagation()} data-testid="settings">
         <h3>Settings</h3>
 
@@ -79,14 +96,7 @@ function Dialog({ initial }: { initial: Settings }) {
           <button className="text-btn" onClick={close}>
             Cancel
           </button>
-          <button
-            className="text-btn primary"
-            data-testid="settings-save"
-            onClick={async () => {
-              await saveSettings(s);
-              close();
-            }}
-          >
+          <button className="text-btn primary" data-testid="settings-save" onClick={() => void saveAndClose()}>
             Save
           </button>
         </div>

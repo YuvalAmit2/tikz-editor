@@ -1,5 +1,5 @@
 // Compiles exported figures with tikzfig.sty and checks the sizes TeX reports.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -118,5 +118,36 @@ describe("tikzfig.sty", () => {
     expect(w[1]).toBeCloseTo(4 * CM + 0.4, 0);
     expect(w[2]).toBeGreaterThan(3 * CM);
     expect(tikzToScene(sceneToTikz(wave))).toEqual(wave);
+  });
+
+  it("centres a figure on its own line, captions it, and stays inline in text", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "tikzfig-"));
+    mkdirSync(path.join(dir, "graphics"));
+    copyFileSync(path.join(__dirname, "../../tex/tikzfig.sty"), path.join(dir, "tikzfig.sty"));
+    writeFileSync(path.join(dir, "graphics", "rect.tikz"), sceneToTikz(rect));
+    // One figure per page; Ghostscript's bbox device reports where the ink is.
+    const pages = [
+      "\\tikzfig{rect}",
+      "\\centerline{\\rule{4cm}{2cm}}",
+      "Text \\tikzfig{rect}",
+      "\\tikzfig[inline]{rect}",
+      "\\tikzfig[caption={A rectangle}, label=fig:r, place=h]{rect} See Figure~\\ref{fig:r}.",
+    ];
+    writeFileSync(
+      path.join(dir, "t.tex"),
+      `\\documentclass{article}\\usepackage{tikzfig}\\pagestyle{empty}\\begin{document}\n${pages.join("\n\\clearpage\n")}\n\\end{document}\n`,
+    );
+    for (let i = 0; i < 2; i++) execFileSync("pdflatex", ["-interaction=nonstopmode", "-halt-on-error", "t.tex"], { cwd: dir });
+    const log = readFileSync(path.join(dir, "t.log"), "utf8");
+    expect(log).not.toMatch(/undefined references/);
+    // The bbox device writes to stderr.
+    const r = spawnSync("gs", ["-q", "-dNOPAUSE", "-dBATCH", "-sDEVICE=bbox", "t.pdf"], { cwd: dir, encoding: "utf8" });
+    const gs = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+    const boxes = [...(gs + "").matchAll(/%%HiResBoundingBox: ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)/g)].map((m) => m.slice(1).map(Number));
+    if (boxes.length === 0) return; // no Ghostscript: compiling is all we can check
+    const mid = (b: number[]) => (b[0] + b[2]) / 2;
+    expect(Math.abs(mid(boxes[0]) - mid(boxes[1]))).toBeLessThan(1); // centred like \centerline
+    expect(boxes[2][0]).toBeLessThan(boxes[0][0] - 20); // in text: not centred
+    expect(boxes[3][0]).toBeLessThan(boxes[0][0] - 20); // inline: not centred
   });
 });

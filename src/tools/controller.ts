@@ -16,6 +16,7 @@ import { buildSnapIndex, snap, type SnapIndex, type SnapResult } from "../model/
 import { newId, type CurveNode, type CurveObj, type EllipseObj, type Obj, type PathObj, type Scene, type Vec } from "../model/types";
 import { nodeHandles, sampleCurve } from "../model/curve";
 import { processStroke } from "../model/sketch";
+import { trimAt, type Piece } from "../model/trim";
 import { closestOnSegment, pathSegments } from "../model/geometry";
 import { labelBox } from "../labels/render";
 import { store, type ToolName } from "../store";
@@ -38,7 +39,8 @@ type Drag =
   | { kind: "handle"; id: string; handle: number; before: Scene; orig: Obj; handles?: { hin: Vec | null; hout: Vec | null }[] }
   | { kind: "draw"; downScreen: Vec; start: Vec }
   | { kind: "curveNode"; index: number; downScreen: Vec }
-  | { kind: "sketch"; pts: Vec[] };
+  | { kind: "sketch"; pts: Vec[] }
+  | { kind: "erase"; pts: Vec[] };
 
 let drag: Drag = { kind: "none" };
 /** Points placed so far by a drawing tool (click-click mode / polyline). */
@@ -46,9 +48,16 @@ let draft: Vec[] = [];
 /** Anchors placed so far by the curve tool. */
 let cdraft: CurveNode[] = [];
 let spaceDown = false;
+/** Space pressed and released without panning: switch to Select. */
+let spaceUsed = false;
 
 const currentDrag = (): Drag => drag;
-export const setSpaceDown = (d: boolean) => (spaceDown = d);
+export function setSpaceDown(d: boolean) {
+  if (d && !spaceDown) spaceUsed = false;
+  spaceDown = d;
+}
+/** True if Space was used to pan since it was pressed. */
+export const spaceWasUsed = () => spaceUsed;
 export const isPanning = () => drag.kind === "pan";
 
 const lbox = (o: Obj) => (o.type === "label" ? labelBox(o) : null);
@@ -72,6 +81,7 @@ function doSnap(p: Vec, e: PEvent, opts: { exclude?: string[]; from?: Vec | null
   return snap(p, snapIndex(opts.exclude), {
     radius: settings.snapRadiusPx / view.zoom,
     gridSize: settings.gridSize,
+    gridPx: view.zoom,
     snapToGrid: settings.snapToGrid,
     snapToObjects: settings.snapToObjects,
     angleFrom: e.shift && opts.from ? opts.from : null,
@@ -101,6 +111,18 @@ export function selectionBox(): Box | null {
   return b;
 }
 
+function curveHandles(o: CurveObj): Handle[] {
+  const hs = nodeHandles(o);
+  const anchors: Handle[] = o.nodes.map((n, j) => ({ id: o.id, kind: "anchor", handle: 3 * j, p: n.p }));
+  const controls: Handle[] = [];
+  o.nodes.forEach((n, j) => {
+    const { hin, hout } = hs[j];
+    if (hin && Math.hypot(hin.x, hin.y) > 1e-9) controls.push({ id: o.id, kind: "control", handle: 3 * j + 1, p: { x: n.p.x + hin.x, y: n.p.y + hin.y }, from: n.p });
+    if (hout && Math.hypot(hout.x, hout.y) > 1e-9) controls.push({ id: o.id, kind: "control", handle: 3 * j + 2, p: { x: n.p.x + hout.x, y: n.p.y + hout.y }, from: n.p });
+  });
+  return [...anchors, ...controls];
+}
+
 export function getHandles(): Handle[] {
   const s = store.get();
   if (s.tool !== "select") return [];
@@ -113,24 +135,17 @@ export function getHandles(): Handle[] {
         { id: o.id, kind: "anchor", handle: 0, p: ellipsePoint(o, 0) },
         { id: o.id, kind: "anchor", handle: 1, p: ellipsePoint(o, Math.PI / 2) },
       ];
-    if (o.type === "curve") {
-      const hs = nodeHandles(o);
-      const anchors: Handle[] = o.nodes.map((n, j) => ({ id: o.id, kind: "anchor", handle: 3 * j, p: n.p }));
-      const controls: Handle[] = [];
-      o.nodes.forEach((n, j) => {
-        const { hin, hout } = hs[j];
-        if (hin && Math.hypot(hin.x, hin.y) > 1e-9) controls.push({ id: o.id, kind: "control", handle: 3 * j + 1, p: { x: n.p.x + hin.x, y: n.p.y + hin.y }, from: n.p });
-        if (hout && Math.hypot(hout.x, hout.y) > 1e-9) controls.push({ id: o.id, kind: "control", handle: 3 * j + 2, p: { x: n.p.x + hout.x, y: n.p.y + hout.y }, from: n.p });
-      });
-      return [...anchors, ...controls];
-    }
+    if (o.type === "curve") return curveHandles(o);
     return [];
   }
   const sel = store.selected();
-  if (sel.length === 0 || (sel.length === 1 && (sel[0].type === "label" || sel[0].type === "point"))) return [];
+  // "Control points" on: every selected curve shows (and lets you drag) its anchors and handles.
+  const curves: Handle[] = s.showControls ? sel.flatMap((o) => (o.type === "curve" ? curveHandles(o) : [])) : [];
+  if (sel.length === 0 || (sel.length === 1 && (sel[0].type === "label" || sel[0].type === "point"))) return curves;
   const b = selectionBox();
-  if (!b || (b.maxX - b.minX < 1e-9 && b.maxY - b.minY < 1e-9)) return [];
+  if (!b || (b.maxX - b.minX < 1e-9 && b.maxY - b.minY < 1e-9)) return curves;
   return [
+    ...curves,
     { id: "", kind: "box", handle: 0, p: { x: b.minX, y: b.minY } },
     { id: "", kind: "box", handle: 1, p: { x: b.maxX, y: b.minY } },
     { id: "", kind: "box", handle: 2, p: { x: b.maxX, y: b.maxY } },
@@ -301,11 +316,90 @@ function finishSketch(raw: Vec[]) {
   store.commit(store.withReplaced([shape]));
 }
 
+// ---------------------------------------------------------------- trim / erase
+
+const TRIMMABLE = new Set(["path", "curve", "ellipse"]);
+
+function trimTarget(p: Vec): Obj | null {
+  const { scene, view } = store.get();
+  const tol = 6 / view.zoom;
+  let best: Obj | null = null;
+  let bd = tol;
+  for (const o of scene.objects) {
+    if (!TRIMMABLE.has(o.type)) continue;
+    // Distance to the stroke only (not the inside of filled shapes).
+    const d = hitDistance({ ...o, style: { ...o.style, fill: null } } as Obj, p, lbox);
+    if (d < bd) {
+      bd = d;
+      best = o;
+    }
+  }
+  return best;
+}
+
+function piecesD(pieces: Piece[]): Obj {
+  const nodes: CurveNode[] = [];
+  const zero = { x: 0, y: 0 };
+  pieces.forEach((p, i) => nodes.push({ p: p.a, mode: "manual", hin: i ? sub(pieces[i - 1].c2, p.a) : zero, hout: sub(p.c1, p.a) }));
+  const last = pieces[pieces.length - 1];
+  nodes.push({ p: last.b, mode: "manual", hin: sub(last.c2, last.b), hout: zero });
+  const style = { stroke: "red!80", width: 1.6, dash: "solid" as const, fill: null, arrowStart: false, arrowEnd: false };
+  return { id: "__trim", type: "curve", style, nodes, closed: false };
+}
+
+function trimPreview(p: Vec): Obj[] {
+  const o = trimTarget(p);
+  if (!o) return [];
+  const r = trimAt(o, p, store.get().scene.objects.filter((x) => x.id !== o.id));
+  return r && r.removed.length ? [piecesD(r.removed)] : [];
+}
+
+/** Trim the object under p in `scene`; null if nothing was there. */
+function trimScene(scene: Scene, p: Vec): Scene | null {
+  const o = trimTarget(p);
+  if (!o) return null;
+  const r = trimAt(o, p, scene.objects.filter((x) => x.id !== o.id));
+  if (!r) return null;
+  const i = scene.objects.findIndex((x) => x.id === o.id);
+  const objects = [...scene.objects.slice(0, i), ...r.kept, ...scene.objects.slice(i + 1)];
+  return { ...scene, objects };
+}
+
+/** A click trims the piece under it; a stroke trims every piece it crosses. */
+function finishErase(pts: Vec[]) {
+  const s = store.get();
+  store.set({ preview: [] });
+  const before = s.scene;
+  let hits: Vec[] = [];
+  const z = s.view.zoom;
+  const len = pts.reduce((a, p, i) => (i ? a + dist(p, pts[i - 1]) : 0), 0);
+  if (len * z < 4) hits = [pts[0]];
+  else {
+    // Where the stroke crosses objects (sampled along the stroke).
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const n = Math.max(1, Math.ceil((dist(pts[i], pts[i + 1]) * z) / 2));
+      for (let k = 0; k < n; k++) {
+        const q = { x: pts[i].x + ((pts[i + 1].x - pts[i].x) * k) / n, y: pts[i].y + ((pts[i + 1].y - pts[i].y) * k) / n };
+        const o = trimTarget(q);
+        if (o && hitDistance({ ...o, style: { ...o.style, fill: null } } as Obj, q, lbox) * z < 2.5 && !hits.some((h) => dist(h, q) * z < 8)) hits.push(q);
+      }
+    }
+  }
+  let scene = before;
+  for (const q of hits) {
+    store.preview(scene);
+    scene = trimScene(scene, q) ?? scene;
+  }
+  store.preview(before);
+  if (scene !== before) store.commit(scene, { selection: [] }, before);
+}
+
 // ---------------------------------------------------------------- events
 
 export function onPointerDown(e: PEvent) {
   const s = store.get();
-  if (e.button === 1 || spaceDown || (e.button === 0 && s.tool === "select" && e.meta && false)) {
+  if (e.button === 1 || spaceDown) {
+    if (spaceDown) spaceUsed = true;
     drag = { kind: "pan", startScreen: e.screen, startView: { cx: s.view.cx, cy: s.view.cy } };
     return;
   }
@@ -315,6 +409,10 @@ export function onPointerDown(e: PEvent) {
 
   if (s.tool === "sketch") {
     drag = { kind: "sketch", pts: [e.world] };
+    return;
+  }
+  if (s.tool === "trim") {
+    drag = { kind: "erase", pts: [e.world] };
     return;
   }
 
@@ -399,7 +497,8 @@ function selectDown(e: PEvent) {
   } else if (!selection.includes(hit.id)) {
     selection = [hit.id];
   }
-  store.set({ selection, editingLabel: hit.type === "label" && selection.length === 1 ? hit.id : null });
+  // A click selects (and lets you drag); a double-click edits a label's text.
+  store.set({ selection, editingLabel: null });
   if (!selection.includes(hit.id)) return;
   // Grab point: the nearest special point of the grabbed object, so that
   // snapping moves that point onto targets (e.g. a vertex onto a vertex).
@@ -475,6 +574,12 @@ export function onPointerMove(e: PEvent) {
       store.set({ preview: curvePreview(null) });
       return;
     }
+    case "erase": {
+      drag.pts.push(e.world);
+      const st = { ...s.style, stroke: "red!70", width: 0.4, fill: null, arrowStart: false, arrowEnd: false, dash: "solid" as const };
+      store.set({ preview: [{ id: "__draft", type: "path", style: st, pts: drag.pts.slice(), closed: false }] });
+      return;
+    }
     case "sketch": {
       drag.pts.push(e.world);
       store.set({ preview: [{ id: "__draft", type: "path", style: { ...s.style, fill: null, arrowStart: false, arrowEnd: false, dash: "solid" }, pts: drag.pts.slice(), closed: false }] });
@@ -516,6 +621,17 @@ export function onPointerMove(e: PEvent) {
           store.set({ snap: null });
         }
         const nodes = o.nodes.map((n, i) => (i === j ? next : n));
+        // ⌘: the mirror-image anchor moves too.
+        const m = e.meta ? mirrorOf(o.nodes.map((n) => n.p), o.closed, j) : null;
+        if (m) {
+          const hs = drag.handles!;
+          const hin = next.mode === "manual" ? next.hin : hs[j].hin;
+          const hout = next.mode === "manual" ? next.hout : hs[j].hout;
+          const keepManual = next.mode === "manual" || o.nodes[m.partner].mode === "manual";
+          nodes[m.partner] = keepManual
+            ? { p: m.R(next.p), mode: "manual", hin: hout ? m.L(hout) : { x: 0, y: 0 }, hout: hin ? m.L(hin) : { x: 0, y: 0 } }
+            : { ...o.nodes[m.partner], p: m.R(next.p) };
+        }
         store.preview(store.withReplaced([{ ...o, nodes }], drag.before));
         return;
       }
@@ -523,6 +639,8 @@ export function onPointerMove(e: PEvent) {
         const prev = o.pts[(drag.handle - 1 + o.pts.length) % o.pts.length];
         const sr = doSnap(e.world, e, { exclude: [o.id], from: drag.handle > 0 || o.closed ? prev : null });
         const pts = o.pts.map((p, i) => (i === drag.handle ? sr.p : p));
+        const m = e.meta ? mirrorOf(o.pts, o.closed, drag.handle) : null;
+        if (m) pts[m.partner] = m.R(sr.p);
         store.set({ snap: sr });
         store.preview(store.withReplaced([{ ...o, pts }], drag.before));
       } else if (o.type === "ellipse") {
@@ -556,6 +674,10 @@ export function onPointerMove(e: PEvent) {
     if (s.tool === "polyline") preview = polylinePreview(sr.p);
     else if (s.tool === "curve") preview = curvePreview(sr.p);
     else if (s.tool === "sketch") preview = [];
+    else if (s.tool === "trim") {
+      store.set({ snap: null, preview: trimPreview(e.world) });
+      return;
+    }
     else if (draft.length === 1) {
       const o = buildShape(s.tool, draft[0], sr.p, e.shift);
       preview = o ? [o] : [];
@@ -569,9 +691,16 @@ export function onPointerUp(e: PEvent) {
   const d = drag;
   drag = { kind: "none" };
   switch (d.kind) {
-    case "move":
-      if (d.moved) store.commit(s.scene, { snap: null }, d.before);
+    case "move": {
+      if (!d.moved) return;
+      // A label moved by hand stays where it was put.
+      const placed = d.orig.filter((o) => o.type === "label" && o.attach).map((o) => {
+        const { attach: _, ...rest } = store.objById(o.id) as Extract<Obj, { type: "label" }>;
+        return rest;
+      });
+      store.commit(placed.length ? store.withReplaced(placed) : s.scene, { snap: null }, d.before);
       return;
+    }
     case "scale":
     case "handle":
       if (s.scene !== d.before) store.commit(s.scene, { snap: null }, d.before);
@@ -584,6 +713,8 @@ export function onPointerUp(e: PEvent) {
       return;
     case "sketch":
       return finishSketch(d.pts);
+    case "erase":
+      return finishErase(d.pts);
     case "draw": {
       if (dist(e.screen, d.downScreen) < 4) {
         // A click: wait for the second click (draft holds the first point).
@@ -596,6 +727,30 @@ export function onPointerUp(e: PEvent) {
       return;
     }
   }
+}
+
+/** Symmetric editing (⌘-drag): the partner of point i in an open chain is
+ *  the one as far from the other end. Points are mirrored across the chain's
+ *  axis (through the middle of the ends and the middle point), or through the
+ *  midpoint for a straight line, so a line grows from both ends at once. */
+export function mirrorOf(pts: Vec[], closed: boolean, i: number): { partner: number; R: (p: Vec) => Vec; L: (v: Vec) => Vec } | null {
+  const n = pts.length;
+  if (closed || n < 2) return null;
+  const partner = n - 1 - i;
+  if (partner === i) return null;
+  const M = { x: (pts[0].x + pts[n - 1].x) / 2, y: (pts[0].y + pts[n - 1].y) / 2 };
+  const C = n % 2 ? pts[(n - 1) / 2] : { x: (pts[n / 2 - 1].x + pts[n / 2].x) / 2, y: (pts[n / 2 - 1].y + pts[n / 2].y) / 2 };
+  const ax = sub(C, M);
+  const l = Math.hypot(ax.x, ax.y);
+  if (l < 1e-9 || n === 2) {
+    return { partner, R: (p) => ({ x: 2 * M.x - p.x, y: 2 * M.y - p.y }), L: (v) => ({ x: -v.x, y: -v.y }) };
+  }
+  const u = { x: ax.x / l, y: ax.y / l };
+  const L = (v: Vec) => {
+    const k = 2 * (v.x * u.x + v.y * u.y);
+    return { x: k * u.x - v.x, y: k * u.y - v.y };
+  };
+  return { partner, R: (p) => add(M, L(sub(p, M))), L };
 }
 
 function degenerate(o: Obj, zoom: number): boolean {

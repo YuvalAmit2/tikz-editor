@@ -62,7 +62,10 @@ export const ANCHORS: Anchor[] = [
   "south east",
 ];
 
-export type FontSize = "" | "\\tiny" | "\\scriptsize" | "\\footnotesize" | "\\small" | "\\large" | "\\Large";
+export type FontSize = "" | "\\tiny" | "\\scriptsize" | "\\footnotesize" | "\\small" | "\\large" | "\\Large" | "\\LARGE";
+
+/** The size picker, smallest to largest; "" (the document's size) is in the middle. */
+export const FONT_SIZES: FontSize[] = ["\\scriptsize", "\\footnotesize", "\\small", "", "\\large", "\\Large", "\\LARGE"];
 
 interface Base {
   id: string;
@@ -104,6 +107,9 @@ export interface LabelObj extends Base {
   /** Which point of the label's box sits at p. */
   anchor: Anchor;
   font: FontSize;
+  /** Smart label: the objects it labels. While set, the label is moved to
+   *  the best spot once its real size is known (cleared when moved by hand). */
+  attach?: string[];
 }
 
 /** An anchor of a smooth curve (see model/curve.ts). */

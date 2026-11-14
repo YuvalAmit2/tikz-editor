@@ -3,7 +3,8 @@ import { call, isElectron } from "./api/client";
 import { clearLabelCache } from "./labels/render";
 import { scalingAbout, rotationAbout, transformObj, translation, unionBox, geomBox, type Box } from "./model/geometry";
 import type { Settings } from "./model/settings";
-import { emptyScene, newId, type Obj, type Style } from "./model/types";
+import { emptyScene, newId, type Dash, type LabelObj, type Obj, type Style } from "./model/types";
+import { placeLabel } from "./model/labelPlace";
 import { sceneToTikz, tikzToScene } from "./tikz/export";
 import { cancelDraft, selectionBox } from "./tools/controller";
 import { askText, store, TRUE_ZOOM, type ToolName } from "./store";
@@ -14,11 +15,14 @@ export function setTool(tool: ToolName) {
   store.set({ tool, pointEdit: null, editingLabel: tool === "select" ? store.get().editingLabel : null });
 }
 
-/** Change style: applies to the selection, or (nothing selected) to new objects. */
+/** Change style: applies to the selection and to new objects. */
 export function applyStyle(patch: Partial<Style>, extra: Partial<Obj> = {}) {
   const s = store.get();
   const sel = store.selected();
-  if (sel.length === 0) return store.set({ style: { ...s.style, ...patch } });
+  // Labels have no fill; their colour shouldn't turn the next shape's fill off.
+  const forNew = sel.length > 0 && sel.every((o) => o.type === "label") ? { stroke: patch.stroke ?? s.style.stroke } : patch;
+  store.set({ style: { ...s.style, ...(sel.length ? forNew : patch) } });
+  if (sel.length === 0) return;
   const changed = sel.map((o) => ({ ...o, ...extra, style: { ...o.style, ...patch } }) as Obj);
   store.commit(store.withReplaced(changed));
 }
@@ -246,4 +250,42 @@ export function align(how: "left" | "hcenter" | "right" | "top" | "vcenter" | "b
     return transformObj(o, translation(dx, dy));
   });
   store.commit(store.withReplaced(moved));
+}
+
+/** "-" / ".": dashed or dotted, pressed again: solid. */
+export function toggleDash(d: Dash) {
+  const sel = store.selected();
+  const cur = (sel[0] ?? null)?.style.dash ?? store.get().style.dash;
+  applyStyle({ dash: cur === d ? "solid" : d });
+}
+
+export async function toggleGridSnap() {
+  const st = store.get().settings;
+  await saveSettings({ ...st, snapToGrid: !st.snapToGrid });
+  store.flash(st.snapToGrid ? "Grid snapping off" : "Grid snapping on");
+}
+
+/** Label the selection: a new label placed next to it, clear of other lines,
+ *  opened for typing. Several objects get one label, a size larger. */
+export function smartLabel() {
+  const s = store.get();
+  const targets = store.selected().filter((o) => o.type !== "label");
+  if (targets.length === 0) return store.flash("Select something to label");
+  const font = targets.length > 1 ? "\\large" : "";
+  const others = s.scene.objects;
+  const est = { w: 0.45, h: 0.4 };
+  const { p, anchor } = placeLabel(targets, others, est, labelBox);
+  const o: LabelObj = {
+    id: newId(),
+    type: "label",
+    style: { ...s.style, fill: null, stroke: s.style.stroke ?? "black" },
+    p,
+    text: "",
+    textMode: false,
+    anchor,
+    font: font as LabelObj["font"],
+    attach: targets.map((t) => t.id),
+  };
+  setTool("select");
+  store.commit({ ...s.scene, objects: [...s.scene.objects, o] }, { selection: [o.id], editingLabel: o.id });
 }
