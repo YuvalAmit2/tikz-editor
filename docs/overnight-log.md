@@ -22,3 +22,9 @@ Everything here is on the `overnight` branch (tikz-editor, and yalatex for the V
 - The ends of an open stroke snap onto objects (so a sketched curve can end exactly on a point), but not to the grid: sketches should keep their shape.
 - Smoothing slider ("Exact … Smooth", 1–12 px, default 4) and the recognition checkbox are saved in settings.
 - **Not built:** "redraw a section" (draw over part of a curve to replace that stretch). It would need splitting curves at arbitrary parameters and matching tangents at both seams. Doable, but it's the most complex item and the least certain to feel good, so it's in "Left for you".
+
+### Snippets in the label editor
+- Reads `~/latex/yalatex/vscode/latex.json` by default (a "Snippet file" setting can point elsewhere; empty = that default) and **re-reads it every time you start editing a label**, so new snippets show up straight away.
+- **Behaves like VS Code**: typing an all-caps prefix shows the matching snippets; Tab or Enter inserts; Tab moves between tab stops. It uses Monaco's own snippet engine, so `${1:default}`, `$0`, nested placeholders and `$TM_SELECTED_TEXT` follow VS Code's rules. In practice the selection is usually replaced as you type the prefix, so wrapping existing text isn't really reachable; I left that as is.
+- Snippets whose body contains `\begin{` (THM, EQ, …) are left out, since environments don't belong in a label.
+- While a suggestion is showing, Enter accepts it rather than finishing the label.

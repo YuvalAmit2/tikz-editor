@@ -24,7 +24,7 @@ export interface Settings {
   showTextWidthGuide: boolean;
   /** In the text panel: Enter commits the label (Shift+Enter = new line). */
   enterCommitsLabel: boolean;
-  /** Path to the VS Code snippet file (latex.json). */
+  /** Path to the VS Code snippet file (latex.json). Empty: yalatex's. */
   snippetFile: string;
   /** Sketch tool: how far (screen px) the clean curve may stray from the stroke. */
   sketchSmoothing: number;
@@ -48,7 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   textWidthCm: 15.9,
   showTextWidthGuide: false,
   enterCommitsLabel: true,
-  snippetFile: "~/latex/yalatex/vscode/latex.json",
+  snippetFile: "",
   sketchSmoothing: 4,
   recognizeShapes: true,
   libraryDir: "",
@@ -57,3 +57,6 @@ export const DEFAULT_SETTINGS: Settings = {
 export function withDefaults(s: Partial<Settings> | undefined): Settings {
   return { ...DEFAULT_SETTINGS, ...(s ?? {}) };
 }
+
+/** Used when snippetFile is empty. */
+export const DEFAULT_SNIPPET_FILE = "~/latex/yalatex/vscode/latex.json";

@@ -5,6 +5,8 @@ import { hasMathDelimiters } from "../labels/mode";
 import type { LabelObj, Scene } from "../model/types";
 import { store, useStore } from "../store";
 import { monaco } from "./monaco";
+import { loadSnippets } from "./snippets";
+import { DEFAULT_SNIPPET_FILE } from "../model/settings";
 
 /** Scene before the current edit session (for one undo step per edit). */
 let sessionBefore: Scene | null = null;
@@ -53,9 +55,15 @@ export function TextPanel() {
       scrollbar: { vertical: "auto", horizontal: "hidden", useShadows: false },
       automaticLayout: true,
       padding: { top: 8, bottom: 8 },
-      quickSuggestions: false,
+      // Snippets: typing an all-caps prefix offers them; Tab/Enter inserts.
+      quickSuggestions: { other: true, comments: false, strings: true },
+      suggestOnTriggerCharacters: false,
+      tabCompletion: "on",
+      snippetSuggestions: "top",
+      suggest: { showWords: false, showIcons: false, preview: true },
       wordBasedSuggestions: "off",
       contextmenu: false,
+      fixedOverflowWidgets: true,
       readOnly: true,
     });
     ed.current = editor;
@@ -101,6 +109,7 @@ export function TextPanel() {
     if (!o) return;
     sessionLabel = editingLabel;
     sessionBefore = store.get().scene;
+    void loadSnippets(store.get().settings.snippetFile || DEFAULT_SNIPPET_FILE);
     editor.updateOptions({ readOnly: false });
     if (editor.getValue() !== o.text) editor.setValue(o.text);
     const model = editor.getModel()!;
