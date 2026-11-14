@@ -4,6 +4,8 @@ import path from "node:path";
 import { createApi } from "../server/api.ts";
 
 const devUrl = process.env.VITE_DEV_SERVER_URL;
+// Tests (and anyone who wants a separate profile) can choose the data folder.
+if (process.env.TIKZ_EDITOR_HOME) app.setPath("userData", process.env.TIKZ_EDITOR_HOME);
 
 /** A .tikz path passed on the command line (`tikz-editor graphics/torus.tikz`). */
 function fileFromArgv(argv: string[], cwd: string): string | null {
@@ -36,6 +38,8 @@ if (!app.requestSingleInstanceLock()) {
     const f = fileFromArgv(argv, cwd);
     if (win) {
       if (win.isMinimized()) win.restore();
+      app.show?.();
+      win.show();
       win.focus();
       if (f) win.webContents.send("open-file", f);
     }
@@ -61,6 +65,12 @@ if (!app.requestSingleInstanceLock()) {
       },
     });
     ipcMain.handle("api", (_e, method: string, params: unknown) => handle(method, params));
+    // "Save and go back": hide the app (macOS returns focus to the previous
+    // app, e.g. VS Code) but keep it running, so the next figure opens instantly.
+    ipcMain.on("hide", () => {
+      if (process.platform === "darwin") app.hide();
+      else win?.minimize();
+    });
     await createWindow();
   });
 

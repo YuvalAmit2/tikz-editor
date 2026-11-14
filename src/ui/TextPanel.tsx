@@ -6,6 +6,7 @@ import type { LabelObj, Scene } from "../model/types";
 import { store, useStore } from "../store";
 import { monaco } from "./monaco";
 import { loadSnippets } from "./snippets";
+import { saveAndHide } from "../actions";
 import { DEFAULT_SNIPPET_FILE } from "../model/settings";
 
 /** Scene before the current edit session (for one undo step per edit). */
@@ -83,6 +84,10 @@ export function TextPanel() {
     }, "!suggestWidgetVisible");
     editor.addCommand(monaco.KeyCode.Escape, finish, "!suggestWidgetVisible && !inSnippetMode");
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyT, () => toggleTextMode());
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      finish();
+      void saveAndHide();
+    });
 
     editor.onDidChangeModelContent(() => {
       const id = store.get().editingLabel;

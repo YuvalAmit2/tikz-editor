@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# tikz-editor [path/to/figure.tikz]
+#
+# Opens TikZ Editor (building it first when the source is newer than the
+# build). If it is already running, the figure opens in the existing window.
+# A path that doesn't exist yet starts a new figure that saves there.
+set -eu
+
+here=$(cd -P "$(dirname "$0")/.." && pwd)
+
+# Absolute paths for the figure (the app runs from its own folder).
+args=()
+for a in "$@"; do
+  case $a in
+    /*) args+=("$a") ;;
+    *) args+=("$PWD/$a") ;;
+  esac
+done
+
+# Apps started from the Dock (e.g. VS Code) may not have Node on their PATH.
+if ! command -v npm >/dev/null 2>&1 && [ -s "$HOME/.nvm/nvm.sh" ]; then
+  # shellcheck disable=SC1091
+  . "$HOME/.nvm/nvm.sh" >/dev/null
+fi
+
+cd "$here"
+if [ ! -f dist/index.html ] || [ ! -f dist-electron/main.cjs ] ||
+   [ -n "$(find src server electron index.html -newer dist/index.html -print -quit 2>/dev/null)" ]; then
+  echo "Building TikZ Editor…" >&2
+  npm run build >/dev/null 2>&1 || { echo "tikz-editor: the build failed; run 'npm run build' in $here to see why" >&2; exit 1; }
+fi
+
+# The Electron binary itself (node_modules/.bin/electron would need Node).
+electron="$here/node_modules/electron/dist/$(cat "$here/node_modules/electron/path.txt")"
+nohup "$electron" "$here" ${args[@]+"${args[@]}"} >/dev/null 2>&1 &

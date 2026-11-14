@@ -11,7 +11,9 @@ import {
   newFigure,
   nudge,
   open,
+  openFromOutside,
   openPath,
+  saveAndHide,
   paste,
   rotate90,
   save,
@@ -54,6 +56,7 @@ function onKeyDown(e: KeyboardEvent) {
     if (k === "z") return handled(), store.undo();
     if (k === "y") return handled(), store.redo();
     if (k === "s") return handled(), save(e.shiftKey);
+    if (e.key === "Enter") return handled(), saveAndHide();
     if (k === "o") return handled(), open();
     if (k === "n") return handled(), newFigure();
     if (k === "a") return handled(), selectAll();
@@ -134,7 +137,7 @@ export function App() {
       const f = await call<string | null>("startupFile");
       if (f) await openPath(f);
     })();
-    (window.tikzApi as any)?.onOpenFile?.((p: string) => openPath(p));
+    (window.tikzApi as any)?.onOpenFile?.((p: string) => openFromOutside(p));
     const beforeUnload = (e: BeforeUnloadEvent) => {
       if (store.get().dirty) e.preventDefault();
     };

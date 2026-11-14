@@ -12,7 +12,9 @@
     "start": "npm run build && electron .",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "install-sty": "scripts/install-sty.sh",
+    "test:app": "npm run build && playwright test -c playwright.electron.config.ts"
   },
   "repository": {
     "type": "git",

@@ -115,6 +115,24 @@ async function askPath(kind: "save" | "open", def: string): Promise<string | nul
   return askText(kind === "save" ? "Save figure as" : "Open figure", { initial: def, label: "Path to a .tikz file", ok: kind === "save" ? "Save" : "Open" });
 }
 
+/** ⌘Enter: save, then (in the app) hide the window and go back to the editor you came from. */
+export async function saveAndHide() {
+  await save();
+  if (store.get().dirty) return; // not saved (cancelled or failed)
+  (window.tikzApi as any)?.hide?.();
+}
+
+/** A figure sent from outside (VS Code / the command line). */
+export async function openFromOutside(path: string) {
+  const s = store.get();
+  if (s.filePath === path) return;
+  if (s.dirty) {
+    if (s.filePath) await save();
+    else if (!window.confirm("Discard the unsaved figure?")) return;
+  }
+  await openPath(path);
+}
+
 export async function save(saveAs = false) {
   const s = store.get();
   let path = s.filePath;

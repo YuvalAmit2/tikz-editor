@@ -45,3 +45,15 @@ Everything here is on the `overnight` branch (tikz-editor, and yalatex for the V
 - **Copy `\tikzfig{name}`** and **Copy TikZ code**: palette.
 - **In-app text prompt**: Save/Open in the browser and "Add to library" used `window.prompt`, which Electron doesn't support at all (it silently returns nothing). That would have broken the library in the desktop app, so I replaced it with a small dialog.
 - Settings window: new fields for the snippet file and the library folder.
+
+### VS Code quick-figure command (yalatex `overnight` branch)
+- **Ctrl+F** (in .tex files) [review]: the same key inkscape-figures uses, which your `\incfig` came from. The current line's text becomes the figure name (`Fiber over p` → `fiber-over-p`), the line becomes `\tikzfig{fiber-over-p}` (indent kept), and TikZ Editor opens `graphics/fiber-over-p.tikz` next to the .tex file. On a line that already has `\tikzfig[…]{name}`, Ctrl+F reopens that figure. On an empty line it asks for a name.
+- In TikZ Editor, **⌘Enter = save and go back**. The window hides instead of quitting, so the next Ctrl+F opens instantly. If the app is already running, a new figure opens in the same window, and the current figure is saved first (or you're asked if it was never saved).
+- The extension finds the editor via a `yalatex.tikzEditor` setting (default `~/latex/tikz-editor/bin/tikz-editor`).
+- `bin/tikz-editor` is the launcher: it rebuilds the app first when the source changed (a few seconds), loads nvm if Node isn't on the PATH, and starts the Electron binary directly. Tested with a bare `PATH=/usr/bin:/bin`, like VS Code started from the Dock.
+- **tikzfig.sty** [review]: `ya-base.sty` now has `\IfFileExists{tikzfig.sty}{\RequirePackage{tikzfig}}{}`, so `\tikzfig` works in every yalatex document once the .sty is installed, and nothing changes until then. **To do once:** `npm run install-sty` in tikz-editor (symlinks `tex/tikzfig.sty` into your TEXMFHOME, so it stays up to date). The extension warns once per session if LaTeX can't find tikzfig.sty.
+- Extension version 0.1.1 → 0.2.0, so `yalatex check`/`update` notice. **To do:** reinstall it with `yalatex vscode-extension` after merging.
+- Not done: the "small always-on-top window" idea. Hiding and showing the normal window felt simpler and more predictable; easy to add if you miss it.
+
+### Desktop-app tests
+- New `npm run test:app`: Playwright drives the real Electron app with its own data folder (`TIKZ_EDITOR_HOME`, so your settings and library are never touched). It covers the command-line file, ⌘S, compiling a label, the library and its name prompt, a second launch handing its figure to the running window, and ⌘Enter hiding the window.
