@@ -55,14 +55,15 @@ const lbox = (o: Obj) => (o.type === "label" ? labelBox(o) : null);
 
 // ---------------------------------------------------------------- snapping
 
-let snapCache: { scene: Scene; exclude: string; index: SnapIndex } | null = null;
+// Rebuilt only when the objects it's built from change: while dragging, the
+// dragged objects are excluded and the others stay the same objects.
+let snapCache: { objs: Obj[]; index: SnapIndex } | null = null;
 function snapIndex(exclude: string[] = []): SnapIndex {
-  const scene = store.get().scene;
-  const key = exclude.join(",");
-  if (snapCache && snapCache.scene === scene && snapCache.exclude === key) return snapCache.index;
   const ex = new Set(exclude);
-  const index = buildSnapIndex(scene.objects.filter((o) => !ex.has(o.id)));
-  snapCache = { scene, exclude: key, index };
+  const objs = store.get().scene.objects.filter((o) => !ex.has(o.id));
+  if (snapCache && snapCache.objs.length === objs.length && snapCache.objs.every((o, i) => o === objs[i])) return snapCache.index;
+  const index = buildSnapIndex(objs);
+  snapCache = { objs, index };
   return index;
 }
 

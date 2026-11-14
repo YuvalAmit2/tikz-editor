@@ -64,13 +64,23 @@ export function buildSnapIndex(objs: Obj[]): SnapIndex {
     const d = Math.abs(a.i - b.i);
     return d <= 1 || (a.closed && d === a.n - 1);
   };
-  // Intersections
-  for (let i = 0; i < segments.length; i++)
-    for (let j = i + 1; j < segments.length; j++) {
+  // Intersections: sweep over x so only segments whose boxes overlap are compared.
+  const order = segments.map((_, i) => i).sort((i, j) => Math.min(segments[i][0].x, segments[i][1].x) - Math.min(segments[j][0].x, segments[j][1].x));
+  const minX = (i: number) => Math.min(segments[i][0].x, segments[i][1].x);
+  const maxX = (i: number) => Math.max(segments[i][0].x, segments[i][1].x);
+  const minY = (i: number) => Math.min(segments[i][0].y, segments[i][1].y);
+  const maxY = (i: number) => Math.max(segments[i][0].y, segments[i][1].y);
+  for (let a = 0; a < order.length; a++) {
+    const i = order[a];
+    const xi = maxX(i);
+    for (let b = a + 1; b < order.length && minX(order[b]) <= xi + 1e-12; b++) {
+      const j = order[b];
+      if (minY(j) > maxY(i) + 1e-12 || maxY(j) < minY(i) - 1e-12) continue;
       if (neighbours(i, j)) continue;
       const x = segIntersect(segments[i][0], segments[i][1], segments[j][0], segments[j][1]);
       if (x) points.push({ p: x, kind: "intersection" });
     }
+  }
   for (const e of ellipses)
     for (const [a, b] of segments) for (const x of segEllipseIntersect(a, b, e)) points.push({ p: x, kind: "intersection" });
   for (let i = 0; i < ellipses.length; i++)
