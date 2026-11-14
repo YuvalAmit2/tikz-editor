@@ -34,9 +34,10 @@ export function Toolbar() {
   return (
     <div className="toolbar">
       <div className="group">
-        {TOOLS.map((t) => (
+        {TOOLS.map((t, i) => (
+          <span key={t.tool} className="tool-slot">
+          {(i === 1 || t.tool === "rect" || t.tool === "text") && <span className="mini-sep" />}
           <button
-            key={t.tool}
             className={"tool" + (tool === t.tool ? " active" : "")}
             title={`${t.label} (${toolKey(t)})`}
             data-testid={`tool-${t.tool}`}
@@ -44,6 +45,7 @@ export function Toolbar() {
           >
             {t.icon}
           </button>
+          </span>
         ))}
       </div>
       <div className="sep" />
@@ -76,6 +78,9 @@ export function Toolbar() {
         <button className="text-btn" title="New figure (⌘N)" onClick={newFigure}>New</button>
         <button className="text-btn" title="Open (⌘O)" onClick={open}>Open</button>
         <button className="text-btn primary" title="Save (⌘S)" onClick={() => save()}>Save</button>
+        <button className="tool" title="Commands (⌘K)" onClick={() => store.set({ palette: true })}>
+          <I><circle cx="9" cy="9" r="5" /><path d="M13 13l4 4" /></I>
+        </button>
         <button className="tool" title="Settings (⌘,)" data-testid="open-settings" onClick={() => store.set({ showSettings: true })}>
           <I><circle cx="10" cy="10" r="2.5" /><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4" /></I>
         </button>

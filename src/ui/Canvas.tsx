@@ -391,14 +391,12 @@ function StatusBar() {
   const pointEdit = useStore((s) => s.pointEdit);
   const hint =
     pointEdit
-      ? "Drag points · double-click the line to add a point · Backspace deletes · Esc: done"
+      ? "Double-click the line to add a point · ⌫ deletes one"
       : tool === "polyline" || tool === "curve"
-        ? "Click to add points · click the first point to close · Enter or double-click to finish"
-        : tool === "sketch"
-          ? "Draw roughly; it becomes a smooth curve or a clean shape"
-        : tool === "select"
+        ? "↵ to finish · click the first point to close"
+        : tool === "select" || tool === "sketch" || tool === "text" || tool === "point"
           ? ""
-          : "Shift: 15° angles / squares · Alt: no snapping · Esc: cancel";
+          : "⇧ constrains · ⌥ turns off snapping";
   return (
     <div className="statusbar">
       <span>{Math.round((zoom / (96 / 2.54)) * 100)}%</span>

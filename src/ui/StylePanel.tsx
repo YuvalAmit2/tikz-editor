@@ -78,7 +78,7 @@ export function StylePanel() {
             <div className="widths">
               {LINE_WIDTHS.map((w, i) => (
                 <button key={w.name} className={Math.abs(st.width - w.pt) < 1e-9 ? "active" : ""} title={`${w.name} (${w.pt}pt) — key ${i + 1}`} onClick={() => applyStyle({ width: w.pt })}>
-                  <svg width="30" height="16"><line x1="3" x2="27" y1="8" y2="8" stroke="currentColor" strokeWidth={Math.max(0.6, w.pt * 2.2)} /></svg>
+                  <svg width="20" height="16"><line x1="2" x2="18" y1="8" y2="8" stroke="currentColor" strokeWidth={Math.max(0.6, w.pt * 2.2)} /></svg>
                 </button>
               ))}
             </div>
@@ -138,7 +138,11 @@ export function StylePanel() {
             <Seg
               value={labels[0].font}
               onPick={(font) => applyProps({ font } as Partial<Obj>, (o) => o.type === "label")}
-              options={(["\\scriptsize", "\\footnotesize", "\\small", "", "\\large"] as FontSize[]).map((f) => ({ v: f, label: f ? f.replace("\\", "").replace("footnotesize", "fnsize").replace("scriptsize", "script") : "normal", title: f || "\\normalsize" }))}
+              options={(["\\scriptsize", "\\footnotesize", "\\small", "", "\\large"] as FontSize[]).map((f, i) => ({
+                v: f,
+                label: <span style={{ fontFamily: "Georgia, serif", fontSize: [9.5, 11, 12.5, 14, 16.5][i] }}>A</span>,
+                title: f || "\\normalsize",
+              }))}
             />
           </section>
           <section>
@@ -168,7 +172,6 @@ export function StylePanel() {
           </button>
         </section>
       )}
-      {objs.length === 0 && <p className="muted small">Nothing selected: these settings apply to the next objects you draw.</p>}
     </div>
   );
 }

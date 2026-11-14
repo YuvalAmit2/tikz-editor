@@ -210,17 +210,19 @@ button {
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 .seg {
-  display: inline-flex;
+  display: flex;
+  max-width: 100%;
   border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
   background: white;
-  flex-wrap: wrap;
 }
 .seg button {
+  flex: 1 1 auto;
   border: none;
   background: transparent;
-  padding: 4px 8px;
+  padding: 4px 5px;
+  white-space: nowrap;
   cursor: pointer;
   min-height: 26px;
   font-size: 12px;
@@ -235,11 +237,11 @@ button {
 }
 .widths {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
 }
 .widths button {
-  height: 26px;
+  height: 24px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: white;
@@ -292,7 +294,8 @@ button {
 
 /* ---------- text panel ---------- */
 .textpanel {
-  height: 116px;
+  height: 36px;
+  transition: height 0.12s ease-out;
   border-top: 1px solid var(--line);
   background: var(--chrome);
   display: flex;
@@ -628,4 +631,22 @@ button {
 .preset-add:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.textpanel.active {
+  height: 116px;
+}
+.textpanel:not(.active) .monaco-host {
+  visibility: hidden;
+}
+
+.tool-slot {
+  display: inline-flex;
+  align-items: center;
+}
+.mini-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--line);
+  margin: 0 4px;
 }

@@ -138,12 +138,12 @@ export function TextPanel() {
         {label && (
           <button
             className={"mode-toggle" + (mode === "math" ? " math" : " text")}
-            title="Toggle math / text (⌘T). Labels are math unless they contain $…$."
+            title={mode === "text-auto" ? "Text, because it contains $…$" : "Math or text (⌘T)"}
             data-testid="mode-toggle"
             onClick={toggleTextMode}
             disabled={mode === "text-auto"}
           >
-            {mode === "math" ? "Math" : mode === "text" ? "Text" : "Text (has $…$)"}
+            {mode === "math" ? "Math" : "Text"}
           </button>
         )}
         {entry?.status === "pending" && <span className="muted small">compiling…</span>}
@@ -152,8 +152,7 @@ export function TextPanel() {
             {entry.error}
           </span>
         )}
-        {!editingLabel && <span className="muted small">Press T and click to add a label, or double-click a label to edit it.</span>}
-        {editingLabel && <span className="muted small grow-right">Enter: done · Shift+Enter: new line · Esc: done</span>}
+        {!editingLabel && <span className="muted small">T to add one</span>}
       </div>
       <div className="monaco-host" ref={host} data-testid="label-editor" />
     </div>

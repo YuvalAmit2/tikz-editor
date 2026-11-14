@@ -106,7 +106,7 @@ test("labels: math by default, text with $, errors shown", async ({ page }) => {
   await page.keyboard.press("t");
   await page.mouse.click(...(await at(page, 0, -2)));
   await page.keyboard.type("Consider $\\Z$");
-  await expect(page.getByTestId("mode-toggle")).toHaveText("Text (has $…$)");
+  await expect(page.getByTestId("mode-toggle")).toHaveText("Text");
   await page.keyboard.press("Enter");
   // Both labels compile and get an image on the canvas
   await expect(page.locator("svg.canvas image")).toHaveCount(2, { timeout: 20_000 });

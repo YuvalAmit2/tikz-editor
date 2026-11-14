@@ -4,6 +4,7 @@ import path from "node:path";
 import { createApi } from "../server/api.ts";
 
 const devUrl = process.env.VITE_DEV_SERVER_URL;
+app.setName("TikZ Editor");
 // Tests (and anyone who wants a separate profile) can choose the data folder.
 if (process.env.TIKZ_EDITOR_HOME) app.setPath("userData", process.env.TIKZ_EDITOR_HOME);
 

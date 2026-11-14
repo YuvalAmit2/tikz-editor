@@ -64,3 +64,11 @@ Everything here is on the `overnight` branch (tikz-editor, and yalatex for the V
 - **Stretching a curve changed its shape**: auto-smooth curves aren't invariant under non-uniform scaling, so the box handles produced a slightly different curve instead of a stretched one. Now a non-uniform scale fixes the handles first, so the result is exactly the stretched curve (rotations, flips and uniform scaling keep the anchors automatic).
 - The browser tests had settings leaking between tests and some races; fixed.
 - New randomised tests: 300 random curves pass through their anchors with finite handles; smooth anchors have no kink; transforms commute with the curve; random scenes round-trip through .tikz; **40 random figures (every object type, style and label kind) compile with pdfLaTeX** through `\tikzfig`.
+
+### Polish
+- **Less explaining**: removed "Nothing selected: these settings apply to the next objects you draw", the long hints in the text panel, and most status-bar hints (what's left is short: "↵ to finish · click the first point to close", "⇧ constrains · ⌥ turns off snapping", and in point editing "Double-click the line to add a point · ⌫ deletes one"). The math/text badge says just "Math" or "Text"; its tooltip says why.
+- **Text panel** is a slim bar ("Label · T to add one") until you edit a label, then expands. That gives the canvas about 80 px more height. It's still a fixed panel at the bottom, as decided.
+- **Label sizes** are shown as five graded "A"s (the LaTeX command is in the tooltip). The words didn't fit.
+- **Thickness** is one row of 7.
+- **Toolbar**: tools grouped (select | lines and curves | shapes | text); a ⌘K button next to Settings, so the palette is discoverable.
+- Electron shows "TikZ Editor" as the app name instead of "Electron".

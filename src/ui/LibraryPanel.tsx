@@ -18,7 +18,7 @@ export function LibraryPanel() {
           + Add
         </button>
       </div>
-      {libraryStore.items().length === 0 && <p className="muted small">Select part of a figure and click + Add to keep it here.</p>}
+      {libraryStore.items().length === 0 && <p className="muted small">Empty. Select something and click + Add.</p>}
       <div className="library-grid">
         {items.map((it) => (
           <div key={it.file ?? it.name} className="library-item" title={`Insert ${it.name}`} onClick={() => insertLibraryItem(it)} data-testid="library-item">
