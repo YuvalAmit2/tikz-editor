@@ -177,7 +177,7 @@ test("smart label: Label button adds a label beside the object and opens it", as
   expect(big.font).toBe("\\large");
 });
 
-test("settings: Esc saves and closes; Copy button copies TikZ", async ({ page, context }) => {
+test("settings: Esc saves and closes; Copy button copies TikZ", async ({ page }) => {
   await setup(page);
   await page.keyboard.press("Control+,");
   await expect(page.getByTestId("settings")).toBeVisible();
@@ -191,10 +191,13 @@ test("settings: Esc saves and closes; Copy button copies TikZ", async ({ page, c
   await expect(page.getByTestId("settings-save")).toBeInViewport();
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1280, height: 820 });
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  // Record what's written (the real clipboard is shared with the rest of the system).
+  await page.evaluate(() => {
+    (navigator.clipboard as any).writeText = async (t: string) => void ((window as any).__copied = t);
+  });
   await line(page, [0, 0], [1, 0]);
   await page.getByTestId("copy-tikz").click();
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("\\path[draw] (0,0) -- (1,0);");
+  await expect.poll(() => page.evaluate(() => (window as any).__copied ?? "")).toContain("\\path[draw] (0,0) -- (1,0);");
 });
 
 test("snippets: Enter accepts the suggestion, the next Enter finishes the label", async ({ page }) => {
