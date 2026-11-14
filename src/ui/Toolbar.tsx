@@ -26,7 +26,7 @@ function Btn({ k, title, active, disabled, onClick, children, testid }: { k?: st
   return (
     <button className={"tool" + (active ? " active" : "")} title={title} disabled={disabled} onClick={onClick} data-testid={testid}>
       {children}
-      {k && <span className="key">{k}</span>}
+      {k && <span className={"key" + (k === "␣" ? " space" : "")}>{k}</span>}
     </button>
   );
 }

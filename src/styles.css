@@ -680,3 +680,7 @@ button {
 .canvas.tool-trim {
   cursor: crosshair;
 }
+.tool .key.space {
+  font-size: 13px;
+  margin-top: -3px;
+}

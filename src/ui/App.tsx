@@ -44,7 +44,10 @@ import { TOOLS, Toolbar, toolKey } from "./Toolbar";
 function isTyping(e: KeyboardEvent) {
   if (store.get().prompt || store.get().palette) return true;
   const t = e.target as HTMLElement | null;
-  return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable || !!t.closest(".monaco-editor"));
+  if (!t) return false;
+  // Checkboxes and sliders keep focus after a click; they don't take typing.
+  if (t.tagName === "INPUT") return !["checkbox", "radio", "range", "button"].includes((t as HTMLInputElement).type);
+  return t.tagName === "TEXTAREA" || t.isContentEditable || !!t.closest(".monaco-editor");
 }
 
 function onKeyDown(e: KeyboardEvent) {
@@ -114,7 +117,10 @@ function onKeyDown(e: KeyboardEvent) {
     if (k === "h") return flipH();
     if (k === "v") return flipV();
     if (k === "r") return rotate90(1);
-    if (k === "t") return smartLabel();
+    if (k === "t") {
+      e.preventDefault(); // or the T lands in the label editor it opens
+      return smartLabel();
+    }
     if (e.key === "!") return zoomToFit(canvasSize());
     return;
   }

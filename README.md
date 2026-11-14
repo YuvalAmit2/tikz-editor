@@ -26,7 +26,7 @@ Open a figure directly: `bin/tikz-editor path/to/graphics/name.tikz` (it builds 
 
 ### From VS Code
 
-With the yalatex extension, type a figure name on its own line in a `.tex` file and press **Ctrl+F**: the line becomes `\tikzfig{name}` and the editor opens `graphics/name.tikz`. **⌘Enter** saves and takes you back.
+With the yalatex extension, type a figure name on its own line in a `.tex` file and press **Ctrl+⌘F**: the line becomes `\tikzfig{name}` and the editor opens `graphics/name.tikz`. **⌘Enter** saves and takes you back.
 
 ## Using figures in LaTeX
 
@@ -40,23 +40,30 @@ Run `npm run install-sty` once (it links `tex/tikzfig.sty` into your personal Te
 \tikzfig[0.4]{torus}       % 0.4\linewidth wide
 \tikzfig[height=3cm]{torus}
 \tikzfig[scale=1.5]{torus}
+\tikzfig[caption={A torus}, label=fig:torus]{torus}   % a figure with a caption
+\tikzfig[inline]{torus}   % in the line, not centred
 ```
 
-Sizes scale the drawing only; labels keep the document's font size and lines keep their thickness.
+On a line of its own a figure is centred. Sizes scale the drawing only; labels keep the document's font size and lines keep their thickness.
 
 ## Keys
 
 | | |
 |---|---|
-| V L P B S R C E D T | Select, Line, Polyline, Curve, Sketch, Rectangle, Circle, Ellipse, Dot, Text |
+| Space (tap) or V | Select |
+| L P B S R C E D T X | Line, Polyline, Curve, Sketch, Rectangle, Circle, Ellipse, Dot, Text, Trim |
+| - . | Dashed, dotted (again: solid) |
+| G | Grid snapping on/off |
+| ⇧T | Label the selection (placed next to it, clear of other lines) |
 | 1–7 | Line thickness (ultra thin … ultra thick) |
 | ⌥1–⌥9 | Style presets |
 | Shift (while drawing) | 15° angles, squares, circles |
 | Alt (while drawing) | No snapping |
-| Double-click | Edit a shape's points / a label's text |
-| …while editing points | Double-click an anchor: smooth ↔ corner; double-click the line: add a point; ⌫: delete the last clicked point; Alt-drag a handle: move it alone |
+| Click / double-click a label | Select it (to move it) / edit its text |
+| Double-click a shape | Edit its points |
+| …while editing points | Double-click an anchor: smooth ↔ corner; double-click the line: add a point; ⌫: delete the last clicked point; Alt-drag a handle: move it alone; ⌘-drag: the mirror-image point moves too |
 | ⇧H ⇧V ⇧R | Flip horizontally / vertically, rotate 90° |
-| Arrow keys | Nudge by one grid step (Shift: four) |
+| Arrow keys | Nudge by one grid step (Shift: four, Alt: a fifth) |
 | ⌘Z ⇧⌘Z ⌘C ⌘V ⌘D ⌘A | Undo, redo, copy, paste, duplicate, select all |
 | ⌘] ⌘[ | Bring to front, send to back |
 | ⌘K | Command palette (every command and library figure) |
@@ -68,7 +75,11 @@ Sizes scale the drawing only; labels keep the document's font size and lines kee
 
 Tool keys can be changed with `"toolKeys": { "curve": "K" }` in `settings.json` (in `~/Library/Application Support/tikz-editor/`).
 
-In the text panel: labels are **math by default** (`\cO_K`), but a label containing `$…$` is text (`Consider $\cO_K$`). ⌘T forces text mode. Enter finishes, Shift+Enter starts a new line. Your VS Code snippets (yalatex's `vscode/latex.json`) work as in VS Code: type the all-caps prefix, then Tab.
+In the text panel: labels are **math by default** (`\cO_K`), but a label containing `$…$` is text (`Consider $\cO_K$`). ⌘T forces text mode. Enter finishes, Shift+Enter starts a new line. Your VS Code snippets (yalatex's `vscode/latex.json`) work as in VS Code: type the all-caps prefix, then Enter or Tab (a second Enter finishes the label).
+
+**Trim (X):** click a piece of a shape to cut it away up to where it crosses other lines, or drag across several pieces. To cut an ellipse in half, draw a line across it, trim one half, delete the line.
+
+**Grid snapping** is magnetic per axis: near a grid line, that coordinate sticks to it and the other one stays free, so you can slide along a grid line.
 
 ## Development
 

@@ -2,7 +2,37 @@
 
 Everything here is on the `overnight` branch (tikz-editor, and yalatex for the VS Code command). Each entry: what I decided, what I passed over, and why. Items marked **[review]** are the ones most worth a look. "Left for you" lists ideas I deliberately didn't build.
 
-## Morning checklist
+## Round 2 (your feedback, night of 2026-11-15)
+
+**To try it:** restart `npm run app`. In yalatex, merge `overnight` again and run `yalatex vscode-extension` (extension 0.2.1: **Ctrl+⌘F**). Nothing is pushed. Tests at the end: 50 unit, 23 browser, 5 desktop-app, all passing.
+
+### Your list, item by item
+- **Arrow keys in text boxes / click vs double-click.** These were one bug: a single click opened the label for editing, so the arrows went to the text editor. Now a **click selects** a label (arrows and dragging move it) and a **double-click edits** it. While you're editing, the arrows move the text cursor.
+- **Finer nudge:** ⌥-arrow moves a fifth of a grid step (0.05 cm by default). ⇧ is still ×4.
+- **Dash keys:** `-` toggles dashed and `.` toggles dotted (pressing the same key again goes back to solid).
+- **Anchors removed** from the panel, replaced by smart labels (below). Labels still have an anchor internally: smart labels set it so the text grows away from the object.
+- **Font size:** the picker has 7 sizes, `\scriptsize … \LARGE`, with the document's own size (the default) in the middle [review]. I added `\Large` and `\LARGE` instead of making `\small` the default, so a default label still matches your text size.
+- **Shortcuts visible:** each toolbar button shows its key underneath. Grid snapping has its own toolbar toggle and key, **G**.
+- **tikzfig:** centred when it's on a line of its own. It stays inline in running text, or with `[inline]`. `caption=` and `label=` make a figure float (`place=h` etc. sets where it goes, default `htbp`). Inside your own `figure` environment it adds the caption without nesting another float. Checked with Ghostscript: the centred figure lines up with `\centerline` to within 0.3pt.
+- **Removing part of a shape → a Trim tool (X)** [review]. You asked whether there's a general way: there is, the CAD "trim" idea. Every shape (line, polygon, curve, ellipse) is turned into a chain of straight/cubic pieces. **Click** a piece and it's cut away up to the nearest crossings with other objects; **drag** across several pieces to cut each one. The piece that would go is shown in red before you click. Cutting an ellipse in half means drawing a line across it, trimming one half, then deleting the line. A line in another spot gives any other amount. What's left is a curve with exact handles (or a path if all its pieces are straight), so it stays editable. One ⌘Z undoes a whole stroke. A piece with no crossings is removed entirely.
+- **Settings:** Save/Cancel stay visible at the bottom when the dialog scrolls. **Esc saves and closes**, and so does clicking outside. Cancel still discards.
+- **Smarter grid snapping** [review]: grid lines are now **magnetic per axis**. Near a vertical grid line, x sticks to it and y moves freely, sticking only when you pass near a horizontal line. The band is a quarter of the grid spacing (at most 6 px), and when you're zoomed out it uses the grid that's actually drawn. The catch: a click that's not near a grid line now gives an off-grid point, whereas it used to always round to the nearest grid point. If that turns out to be worse for quick rectangles, the old rounding is one line to bring back, or could be a setting.
+- **Gear and ⌘ icons** for settings and the palette.
+- **Symmetry** [review]: hold **⌘ while dragging a point** of a line, polyline or open curve (in point editing, or with Control points on), and its mirror-image point moves too. Point *i* pairs with the point as far from the other end. For a plain line the mirror is through the midpoint, so the line grows from both ends. Otherwise it's across the shape's axis, the line through the middle of the two ends and the middle point. That covers your 3-point arch: drag one end onto the bottom curve and the other end follows symmetrically. Handles are mirrored too. Closed shapes and the middle point itself have no partner. I left out anything automatic (e.g. detecting symmetric shapes) as too contrived.
+- **Control points toggle** in the panel whenever curves are selected. It shows anchors and handles of *every* selected curve, and they can be dragged directly.
+- **Space = Select:** a tap switches to Select, holding it still pans. V also still works.
+- **Smart labels:** select something and press **Label** in the panel, or **⇧T**. A label is placed next to it and opened for typing. Candidate spots are around points, outside ellipses (on the ellipse, pushed outward), beside the middle of lines and curves (convex side first), past line ends, and around the bounding box. The chosen spot crosses no lines (filled insides don't count) and doesn't overlap other labels; upper-right is preferred. It's placed once with a guessed size, then **placed again once with the real compiled size**. Moving it by hand turns this off. Several objects get one label, `\large`.
+- **Ctrl+⌘F** in VS Code instead of Ctrl+F. Note that macOS VS Code binds Ctrl+⌘F to full screen by default. The extension's binding only applies in `.tex` files, where it wins.
+- **Restyling a selection now also sets the style for new objects** (changed back as you asked). One exception: picking a colour for a *label* only changes the new-object stroke colour, so it doesn't turn off fills for the next shape.
+- **Snippets** [review]: I couldn't make them fail. With your real `~/latex/yalatex/vscode/latex.json` and default settings, typing `FRA` → Enter gives `\frac{}{}` in both the browser build and the Electron app. My guess is that the app you tried was started before the overnight changes, so restarting `npm run app` should fix it. Only the snippets that make sense in a label are offered: PD, MATR, TIT, TBF, IMP, IMB, TERM, FRAC, PAREN, BRAX (environment snippets like THM are left out). They need capitals: `FRA`, not `fra`. **Enter accepts a suggestion, and the next Enter finishes the label**; there's now a test for exactly this.
+- **Copy** button in the top bar: copies the figure's TikZ code.
+
+### Bugs found while testing this round
+- ⇧T typed a "T" into the label it had just opened.
+- Esc in Settings closed the dialog only after the save finished, so a key pressed right after it was lost. It now closes at once.
+- After clicking a checkbox in the side panel (Control points, Recognise shapes), keyboard shortcuts stopped working until you clicked the canvas. Checkboxes and sliders no longer count as "typing".
+
+## Morning checklist (round 1)
 
 1. Review this log, then try things out: `npm run app` (restart it if it's still running from yesterday: the Electron side changed).
 2. `npm run install-sty` once, so `\tikzfig` works in your documents (yalatex loads it automatically on the `overnight` branch).

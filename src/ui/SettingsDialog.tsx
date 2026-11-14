@@ -16,9 +16,11 @@ function Dialog({ initial }: { initial: Settings }) {
   const close = () => store.set({ showSettings: false });
   const latest = useRef(s);
   latest.current = s;
+  // Close at once (so the next key goes to the canvas); the save finishes in the background.
   const saveAndClose = async () => {
-    await saveSettings(latest.current);
+    const next = latest.current;
     close();
+    await saveSettings(next);
   };
   // Esc closes and keeps the changes (like closing a settings window).
   useEffect(() => {

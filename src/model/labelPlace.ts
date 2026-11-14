@@ -104,6 +104,8 @@ function candidates(targets: Obj[], gap: number): Candidate[] {
     if ((o.type === "path" || o.type === "curve") && !o.closed) {
       // Beside the middle of the line, on either side, and past its ends.
       const pts = o.type === "path" ? o.pts : sampleCurve(o, 16);
+      // The outer (convex) side of a bent line first: away from its centroid.
+      const cen = pts.reduce((a, p) => ({ x: a.x + p.x / pts.length, y: a.y + p.y / pts.length }), { x: 0, y: 0 });
       let total = 0;
       for (let i = 0; i + 1 < pts.length; i++) total += dist(pts[i], pts[i + 1]);
       for (const f of [0.5, 0.35, 0.65]) {
@@ -114,7 +116,8 @@ function candidates(targets: Obj[], gap: number): Candidate[] {
             const t = (total * f - acc) / l;
             const m = { x: pts[i].x + (pts[i + 1].x - pts[i].x) * t, y: pts[i].y + (pts[i + 1].y - pts[i].y) * t };
             const n = { x: -(pts[i + 1].y - pts[i].y) / l, y: (pts[i + 1].x - pts[i].x) / l };
-            for (const sgn of [1, -1]) {
+            const outward = (m.x - cen.x) * n.x + (m.y - cen.y) * n.y;
+            for (const sgn of outward < -1e-9 ? [-1, 1] : [1, -1]) {
               const d = { x: n.x * sgn, y: n.y * sgn };
               out.push({ p: { x: m.x + d.x * gap, y: m.y + d.y * gap }, anchor: anchorFor(d.x, d.y), rank: rank++ });
             }

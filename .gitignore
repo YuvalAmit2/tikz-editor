@@ -7,3 +7,4 @@ tests/e2e/__screens__/
 .cache/
 *.log
 .DS_Store
+tests/scratch/
