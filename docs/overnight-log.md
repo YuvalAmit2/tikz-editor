@@ -28,3 +28,20 @@ Everything here is on the `overnight` branch (tikz-editor, and yalatex for the V
 - **Behaves like VS Code**: typing an all-caps prefix shows the matching snippets; Tab or Enter inserts; Tab moves between tab stops. It uses Monaco's own snippet engine, so `${1:default}`, `$0`, nested placeholders and `$TM_SELECTED_TEXT` follow VS Code's rules. In practice the selection is usually replaced as you type the prefix, so wrapping existing text isn't really reachable; I left that as is.
 - Snippets whose body contains `\begin{` (THM, EQ, …) are left out, since environments don't belong in a label.
 - While a suggestion is showing, Enter accepts it rather than finishing the label.
+
+### Figure library
+- **Add**: select objects → **Add to library** (style panel) or **+ Add** (library tab) or ⌘K → "Save selection to library…" → type a name. Saving a name that already exists asks before replacing.
+- **Insert**: click a thumbnail in the **Library** tab (next to Style in the right panel), or ⌘K and type its name. A plain copy (as decided) goes in the middle of the view, snapped to the grid and selected, ready to drag.
+- **Storage** [review]: one JSON file per item (objects centred on the origin + an SVG thumbnail), in `~/Library/Application Support/tikz-editor/library` by default. A **Library folder** setting can point it elsewhere: set it to e.g. `~/latex/yalatex/tikz-library` to get syncing and versioning as we discussed. I didn't create that folder in your repo myself.
+- No tags: search matches names. Tags felt like extra UI for little gain at this size. Easy to add later.
+- Delete: hover a thumbnail → ×.
+
+### Command palette (⌘K)
+- Fuzzy search over every command, every tool, the toggles (grid, snapping, text-width guide, return-to-Select) and every library figure ("ins torus" → Enter).
+
+### Extras I added (small, and relevant to drawing figures)
+- **Bring to front / send to back**: ⌘] / ⌘[ (and in the palette).
+- **Align** left/right/top/bottom/centres: palette only, to keep the toolbar clean.
+- **Copy `\tikzfig{name}`** and **Copy TikZ code**: palette.
+- **In-app text prompt**: Save/Open in the browser and "Add to library" used `window.prompt`, which Electron doesn't support at all (it silently returns nothing). That would have broken the library in the desktop app, so I replaced it with a small dialog.
+- Settings window: new fields for the snippet file and the library folder.

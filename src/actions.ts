@@ -6,7 +6,7 @@ import type { Settings } from "./model/settings";
 import { emptyScene, newId, type Obj, type Style } from "./model/types";
 import { sceneToTikz, tikzToScene } from "./tikz/export";
 import { cancelDraft, selectionBox } from "./tools/controller";
-import { store, TRUE_ZOOM, type ToolName } from "./store";
+import { askText, store, TRUE_ZOOM, type ToolName } from "./store";
 import { labelBox } from "./labels/render";
 
 export function setTool(tool: ToolName) {
@@ -112,7 +112,7 @@ async function askPath(kind: "save" | "open", def: string): Promise<string | nul
   if (isElectron) {
     return (await call<string | null>(kind === "save" ? "showSaveDialog" : "showOpenDialog", { defaultPath: def })) ?? null;
   }
-  return window.prompt(kind === "save" ? "Save figure as (path to a .tikz file):" : "Open figure (path to a .tikz file):", def);
+  return askText(kind === "save" ? "Save figure as" : "Open figure", { initial: def, label: "Path to a .tikz file", ok: kind === "save" ? "Save" : "Open" });
 }
 
 export async function save(saveAs = false) {
@@ -167,4 +167,65 @@ export async function saveSettings(settings: Settings) {
   store.set({ settings });
   await call("saveSettings", { settings });
   if (old.preamble !== settings.preamble || old.preambleFile !== settings.preambleFile || old.documentClass !== settings.documentClass) clearLabelCache();
+}
+
+// ---------------------------------------------------------------- more commands
+
+export function canvasSize() {
+  const el = document.querySelector(".canvas-wrap") as HTMLElement | null;
+  return { w: el?.clientWidth ?? 800, h: el?.clientHeight ?? 600 };
+}
+
+async function toClipboard(text: string, what: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    store.flash(`Copied ${what}`);
+  } catch {
+    store.flash("Couldn't use the clipboard");
+  }
+}
+
+/** \tikzfig{name} for the current file (graphics/name.tikz -> name). */
+export function copyTikzfigCommand() {
+  const p = store.get().filePath;
+  if (!p) return store.flash("Save the figure first");
+  const name = p.split(/[\\/]/).pop()!.replace(/\.tikz$/, "");
+  void toClipboard(`\\tikzfig{${name}}`, `\\tikzfig{${name}}`);
+}
+
+export function copyTikz() {
+  void toClipboard(sceneToTikz(store.get().scene), "the TikZ code");
+}
+
+/** Bring the selection to the front (drawn last) or send it to the back. */
+export function reorder(where: "front" | "back") {
+  const s = store.get();
+  const sel = new Set(s.selection);
+  if (sel.size === 0) return;
+  const a = s.scene.objects.filter((o) => sel.has(o.id));
+  const b = s.scene.objects.filter((o) => !sel.has(o.id));
+  store.commit({ ...s.scene, objects: where === "front" ? [...b, ...a] : [...a, ...b] });
+}
+
+const objBox = (o: Obj): Box | null => (o.type === "label" ? labelBox(o) : geomBox(o));
+
+/** Align the selected objects' boxes to the selection's box. */
+export function align(how: "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom") {
+  const sel = store.selected();
+  const all = selectionBox();
+  if (sel.length < 2 || !all) return store.flash("Select two or more objects to align");
+  const moved = sel.map((o) => {
+    const b = objBox(o);
+    if (!b) return o;
+    let dx = 0;
+    let dy = 0;
+    if (how === "left") dx = all.minX - b.minX;
+    if (how === "right") dx = all.maxX - b.maxX;
+    if (how === "hcenter") dx = (all.minX + all.maxX) / 2 - (b.minX + b.maxX) / 2;
+    if (how === "bottom") dy = all.minY - b.minY;
+    if (how === "top") dy = all.maxY - b.maxY;
+    if (how === "vcenter") dy = (all.minY + all.maxY) / 2 - (b.minY + b.maxY) / 2;
+    return transformObj(o, translation(dx, dy));
+  });
+  store.commit(store.withReplaced(moved));
 }

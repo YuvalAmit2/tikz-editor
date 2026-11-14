@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { saveSettings } from "../actions";
-import type { Settings } from "../model/settings";
+import { DEFAULT_SNIPPET_FILE, type Settings } from "../model/settings";
 import { store, useStore } from "../store";
 
 export function SettingsDialog() {
@@ -55,6 +55,17 @@ function Dialog({ initial }: { initial: Settings }) {
             …or use the preamble of this .tex file <span className="muted small">(overrides the two fields above)</span>
           </span>
           <input type="text" placeholder="~/notes/main.tex" value={s.preambleFile} onChange={(e) => set("preambleFile", e.target.value)} spellCheck={false} />
+        </label>
+
+        <label className="row col">
+          <span>Snippet file</span>
+          <input type="text" placeholder={DEFAULT_SNIPPET_FILE} value={s.snippetFile} onChange={(e) => set("snippetFile", e.target.value)} spellCheck={false} />
+        </label>
+
+        <h4>Library</h4>
+        <label className="row col">
+          <span>Library folder</span>
+          <input type="text" placeholder="In the app's data folder" value={s.libraryDir} onChange={(e) => set("libraryDir", e.target.value)} spellCheck={false} />
         </label>
 
         <h4>Page</h4>

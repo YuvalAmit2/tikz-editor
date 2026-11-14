@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import {
   applyStyle,
+  canvasSize,
   copy,
+  reorder,
   deleteSelection,
   duplicate,
   flipH,
@@ -23,19 +25,19 @@ import { call } from "../api/client";
 import { withDefaults, type Settings } from "../model/settings";
 import { LINE_WIDTHS } from "../model/types";
 import { cancelDraft, deleteActiveNode, finishCurve, finishPolyline, hasDraft, removeLastDraftPoint, setSpaceDown } from "../tools/controller";
-import { store } from "../store";
+import { store, useStore } from "../store";
 import { Canvas } from "./Canvas";
 import { SettingsDialog } from "./SettingsDialog";
 import { StylePanel } from "./StylePanel";
+import { LibraryPanel } from "./LibraryPanel";
+import { CommandPalette } from "./CommandPalette";
+import { Prompt } from "./Prompt";
 import { TextPanel } from "./TextPanel";
 import { TOOLS, Toolbar } from "./Toolbar";
 
-function canvasSize() {
-  const el = document.querySelector(".canvas-wrap") as HTMLElement | null;
-  return { w: el?.clientWidth ?? 800, h: el?.clientHeight ?? 600 };
-}
 
 function isTyping(e: KeyboardEvent) {
+  if (store.get().prompt || store.get().palette) return true;
   const t = e.target as HTMLElement | null;
   return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable || !!t.closest(".monaco-editor"));
 }
@@ -59,6 +61,9 @@ function onKeyDown(e: KeyboardEvent) {
     if (k === "v") return handled(), paste();
     if (k === "d") return handled(), duplicate();
     if (k === ",") return handled(), store.set({ showSettings: true });
+    if (k === "k") return handled(), store.set({ palette: true });
+    if (k === "]") return handled(), reorder("front");
+    if (k === "[") return handled(), reorder("back");
     if (k === "=" || k === "+") return handled(), zoomAt(1.25);
     if (k === "-") return handled(), zoomAt(0.8);
     if (k === "0") return handled(), zoomTrueSize();
@@ -160,10 +165,29 @@ export function App() {
       <Toolbar />
       <div className="main">
         <Canvas />
-        <StylePanel />
+        <SidePanel />
       </div>
       <TextPanel />
       <SettingsDialog />
+      <CommandPalette />
+      <Prompt />
     </div>
+  );
+}
+
+function SidePanel() {
+  const side = useStore((s) => s.side);
+  return (
+    <aside className="panel">
+      <div className="side-tabs">
+        <button className={side === "style" ? "active" : ""} onClick={() => store.set({ side: "style" })}>
+          Style
+        </button>
+        <button className={side === "library" ? "active" : ""} onClick={() => store.set({ side: "library" })} data-testid="tab-library">
+          Library
+        </button>
+      </div>
+      {side === "style" ? <StylePanel /> : <LibraryPanel />}
+    </aside>
   );
 }

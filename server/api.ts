@@ -43,7 +43,50 @@ export function createApi(platform: Platform) {
     return { documentClass: s.documentClass, preamble: s.preamble };
   }
 
+  async function libraryDir(): Promise<string> {
+    const s = await getSettings();
+    const dir = s.libraryDir ? expandHome(s.libraryDir) : path.join(platform.dataDir, "library");
+    await fs.mkdir(dir, { recursive: true });
+    return dir;
+  }
+  /** File name for a library item: its name, made safe. */
+  const itemFile = (name: string) =>
+    name
+      .trim()
+      .replace(/[^\p{L}\p{N} _.-]+/gu, "-")
+      .replace(/^\.+/, "")
+      .slice(0, 80) + ".json";
+
   const handlers: Record<string, (p: any) => Promise<unknown>> = {
+    /** All library items (each a JSON file in the library folder), newest first. */
+    async listLibrary() {
+      const dir = await libraryDir();
+      const out: unknown[] = [];
+      for (const f of await fs.readdir(dir)) {
+        if (!f.endsWith(".json")) continue;
+        try {
+          const item = JSON.parse(await fs.readFile(path.join(dir, f), "utf8"));
+          if (item && Array.isArray(item.objects)) out.push({ ...item, file: f });
+        } catch {
+          // ignore broken files
+        }
+      }
+      out.sort((a: any, b: any) => (b.created ?? 0) - (a.created ?? 0));
+      return out;
+    },
+    async saveLibraryItem(p: { item: { name: string } }) {
+      const dir = await libraryDir();
+      const file = itemFile(p.item.name);
+      if (file === ".json") throw new Error("Give the figure a name");
+      await fs.writeFile(path.join(dir, file), JSON.stringify(p.item, null, 1) + "\n");
+      return file;
+    },
+    async deleteLibraryItem(p: { file: string }) {
+      const dir = await libraryDir();
+      const f = path.basename(p.file);
+      await fs.rm(path.join(dir, f), { force: true });
+      return true;
+    },
     async getSettings() {
       return getSettings();
     },

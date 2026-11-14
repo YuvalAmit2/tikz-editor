@@ -41,6 +41,12 @@ export interface AppState {
   cursor: { x: number; y: number } | null;
   message: string | null;
   showSettings: boolean;
+  /** A text prompt (in-app: Electron has no window.prompt). */
+  prompt: { title: string; label?: string; initial: string; placeholder?: string; ok: string; resolve: (v: string | null) => void } | null;
+  /** Command palette (⌘K) open. */
+  palette: boolean;
+  /** What the right-hand panel shows. */
+  side: "style" | "library";
 }
 
 type Listener = () => void;
@@ -64,6 +70,9 @@ class Store {
     cursor: null,
     message: null,
     showSettings: false,
+    prompt: null,
+    palette: false,
+    side: "style",
   };
   private listeners = new Set<Listener>();
   private undoStack: Scene[] = [];
@@ -144,4 +153,23 @@ export const store = new Store();
 
 export function useStore<T>(sel: (s: AppState) => T): T {
   return useSyncExternalStore(store.subscribe, () => sel(store.get()));
+}
+
+/** Ask for a line of text in an in-app dialog. Resolves null on cancel. */
+export function askText(title: string, opts: { initial?: string; placeholder?: string; ok?: string; label?: string } = {}): Promise<string | null> {
+  return new Promise((resolve) => {
+    store.set({
+      prompt: {
+        title,
+        label: opts.label,
+        initial: opts.initial ?? "",
+        placeholder: opts.placeholder,
+        ok: opts.ok ?? "OK",
+        resolve: (v) => {
+          store.set({ prompt: null });
+          resolve(v);
+        },
+      },
+    });
+  });
 }

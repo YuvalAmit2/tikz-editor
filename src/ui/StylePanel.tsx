@@ -1,4 +1,5 @@
 import { applyProps, applyStyle, deleteSelection, saveSettings } from "../actions";
+import { saveSelectionToLibrary } from "../library";
 import { ANCHORS, LINE_WIDTHS, type Anchor, type FontSize, type Obj, type Style } from "../model/types";
 import { PALETTE, TINTS, xcolorCss } from "../model/xcolor";
 import { useStore } from "../store";
@@ -62,7 +63,7 @@ export function StylePanel() {
   const [fillBase, fillTint] = splitTint(st.fill);
 
   return (
-    <aside className="panel" data-testid="style-panel">
+    <div data-testid="style-panel">
       <div className="panel-title">{objs.length === 0 ? "New objects" : objs.length === 1 ? objTitle(objs[0]) : `${objs.length} objects`}</div>
 
       <section>
@@ -156,14 +157,17 @@ export function StylePanel() {
       {tool === "sketch" && objs.length === 0 && <SketchOptions />}
 
       {objs.length > 0 && (
-        <section>
+        <section className="panel-actions">
+          <button className="text-btn" onClick={saveSelectionToLibrary} title="Keep this in the figure library">
+            Add to library
+          </button>
           <button className="text-btn danger" onClick={deleteSelection}>
             Delete
           </button>
         </section>
       )}
       {objs.length === 0 && <p className="muted small">Nothing selected: these settings apply to the next objects you draw.</p>}
-    </aside>
+    </div>
   );
 }
 
