@@ -2,6 +2,14 @@
 
 Everything here is on the `overnight` branch (tikz-editor, and yalatex for the VS Code command). Each entry: what I decided, what I passed over, and why. Items marked **[review]** are the ones most worth a look. "Left for you" lists ideas I deliberately didn't build.
 
+## Morning checklist
+
+1. Review this log, then try things out: `npm run app` (restart it if it's still running from yesterday: the Electron side changed).
+2. `npm run install-sty` once, so `\tikzfig` works in your documents (yalatex loads it automatically on the `overnight` branch).
+3. In yalatex: merge `overnight`, then `yalatex vscode-extension` to install extension 0.2.0 (Ctrl+F figures).
+4. Merge tikz-editor's `overnight` branch. **Nothing is pushed**: both branches are local only.
+5. Tests: `npm test` (34), `CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" npm run test:e2e` (14), `npm run test:app` (5). All passed at the end of the night.
+
 ## Decisions
 
 ### Style panel
@@ -72,3 +80,16 @@ Everything here is on the `overnight` branch (tikz-editor, and yalatex for the V
 - **Thickness** is one row of 7.
 - **Toolbar**: tools grouped (select | lines and curves | shapes | text); a ⌘K button next to Settings, so the palette is discoverable.
 - Electron shows "TikZ Editor" as the app name instead of "Electron".
+
+### Things from our discussion I resolved myself
+- **True size vs. free drawing**: left as it is. You draw freely, ⌘0 shows true size, the text-width guide shows the page, and `\tikzfig[width]` sets the size. This was the open question from before; nothing I built depends on it.
+- **Colour hotkeys**: not separate keys (the letters are taken by tools). Style presets (⌥1–⌥9) cover "this colour + this thickness + dashed" in one key.
+- **Commutative diagrams**: still out of scope (quiver).
+
+## Left for you (deliberately not built)
+- **Redraw a section of a curve** by sketching over it. The most complex item; needs curve splitting and tangent matching at both seams.
+- **Labels that stick to an object** and move with it (e.g. a label attached to a point). It needs a notion of attachment or grouping in the model.
+- **Groups** (move/scale several objects as one, also in the library). The library already treats a selection as a unit; real groups touch selection, hit-testing and export.
+- **Dark theme**: the design said light. The colours are CSS variables, so it's mostly a stylesheet.
+- **Arcs and angle marks** (an arc tool, right-angle marks). Common in lecture figures and very doable, but it's a new object type, so I'd rather you choose what it should look like.
+- **Packaging** as a real .app (electron-builder) with an icon, so it isn't "Electron" in the Dock when started outside `bin/tikz-editor`.
