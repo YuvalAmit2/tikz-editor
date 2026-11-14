@@ -333,9 +333,10 @@ export function processStroke(raw: Vec[], opts: { tol: number; spacing: number; 
   const pushSegs = (segs: Seg[], firstIsCorner: boolean) => {
     segs.forEach((s, i) => {
       const prev = nodes[nodes.length - 1];
-      if (i === 0 && prev && dist(prev.p, s.a) < 1e-9) {
+      // Pieces meet end to start: one anchor there, not two on top of each other.
+      if (prev && dist(prev.p, s.a) < 1e-9) {
         prev.hout = sub(s.c1, s.a);
-        if (firstIsCorner) prev.mode = "manual";
+        if (i === 0 && firstIsCorner) prev.mode = "manual";
       } else nodes.push({ p: s.a, mode: "manual", hin: { x: 0, y: 0 }, hout: sub(s.c1, s.a) });
       nodes.push({ p: s.b, mode: "manual", hin: sub(s.c2, s.b), hout: { x: 0, y: 0 } });
     });

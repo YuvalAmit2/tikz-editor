@@ -10,6 +10,7 @@ import {
   editTargets,
   getHandles,
   isPanning,
+  onContextMenu,
   onDoubleClick,
   onPointerDown,
   onPointerMove,
@@ -97,6 +98,10 @@ export function Canvas() {
         onPointerMove={(e) => onPointerMove(ev(e))}
         onPointerUp={(e) => onPointerUp(ev(e))}
         onDoubleClick={(e) => onDoubleClick(ev(e))}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onContextMenu(ev(e), { x: e.clientX, y: e.clientY });
+        }}
         onPointerLeave={() => store.set({ cursor: null, insertHint: null })}
       >
         {s.settings.showGrid && <Grid size={size} z={z} tx={tx} ty={ty} grid={s.settings.gridSize} />}
@@ -168,7 +173,31 @@ function ArrowTip({ tip, from, st, z }: { tip: Vec; from: Vec; st: Style; z: num
   );
 }
 
+/** pt per font size command (11pt document). */
+const FONT_PT: Record<string, number> = { "\\tiny": 6, "\\scriptsize": 8, "\\footnotesize": 9, "\\small": 10, "": 10.95, "\\large": 12, "\\Large": 14.4, "\\LARGE": 17.28 };
+
+/** Text along a curve. Drawn in a y-down frame so the letters stand upright. */
+function CurveTextView({ o }: { o: Extract<Obj, { type: "curve" }> }) {
+  const segs = curveSegments(o);
+  if (!segs.length) return null;
+  const f = (p: Vec) => `${p.x},${-p.y}`;
+  const d = `M${f(segs[0].a)}` + segs.map((s) => ` C${f(s.c1)} ${f(s.c2)} ${f(s.b)}`).join("");
+  const id = "tp-" + o.id;
+  const plain = o.text!.replace(/\$/g, "").replace(/\\[a-zA-Z]+\s*/g, "").replace(/[{}|]/g, "");
+  return (
+    <g data-id={o.id} transform="scale(1,-1)">
+      <path id={id} d={d} fill="none" stroke="none" />
+      <text fontSize={ptToCm(FONT_PT[o.textFont ?? ""] ?? 10.95)} fill={xcolorCss(o.style.stroke ?? "black")} fontFamily="'Latin Modern Roman', 'CMU Serif', Georgia, serif">
+        <textPath href={"#" + id} startOffset="50%" textAnchor="middle">
+          {plain}
+        </textPath>
+      </text>
+    </g>
+  );
+}
+
 function ObjView({ o, z }: { o: Obj; z: number }) {
+  if (o.type === "curve" && o.text) return <CurveTextView o={o} />;
   if (o.parts?.length && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) return <PartedView o={o} z={z} />;
   return <PlainObjView o={o} z={z} />;
 }
@@ -355,6 +384,8 @@ function SelectionOverlay({ toScreen, multi }: { toScreen: (p: Vec) => Vec; mult
       {handles.map((h, i) => {
         const p = toScreen(h.p);
         if (h.kind === "rotate") return <circle key={i} cx={p.x} cy={p.y} r={4.5} fill="white" stroke={SEL} strokeWidth={1.5} data-testid="rotate-handle" />;
+        // On one of the object's points: grabs the object there (a circle, like the other points).
+        if (h.kind === "grab") return <circle key={i} cx={p.x} cy={p.y} r={4.5} fill="white" stroke={SEL} strokeWidth={1.5} data-testid="grab-handle" />;
         if (h.kind === "edge") return <rect key={i} x={p.x - 3.5} y={p.y - 3.5} width={7} height={7} fill="white" stroke={SEL} strokeWidth={1.5} data-testid="edge-handle" />;
         if (h.kind === "control") return <rect key={i} x={p.x - 3.5} y={p.y - 3.5} width={7} height={7} fill={SEL} stroke="white" strokeWidth={1} transform={`rotate(45 ${p.x} ${p.y})`} data-testid="control-handle" />;
         const obj = h.id === editObj?.id ? editObj : h.id ? store.objById(h.id) : undefined;
@@ -460,9 +491,11 @@ function StatusBar() {
   const editing = useStore((s) => !!s.pointEdit || (s.showControls && s.tool === "select" && s.scene.objects.some((o) => o.type === "curve" && s.selection.includes(o.id))));
   const hint =
     editing
-      ? "Double-click the line to add a point · ⌫ deletes one · ⌘-drag mirrors"
+      ? "↵ adds a point at the dot on the line · ⌫ deletes one · ⇧-drag mirrors"
       : tool === "polyline" || tool === "curve"
         ? "↵ to finish · click the first point to close"
+        : tool === "fill"
+          ? "Click inside a closed region to fill it"
         : tool === "trim"
           ? "Click a piece to cut it away, or drag across pieces"
           : tool === "select" || tool === "sketch" || tool === "text" || tool === "point"

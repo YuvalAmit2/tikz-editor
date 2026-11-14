@@ -123,7 +123,7 @@ export function transformObj(o: Obj, m: Affine): Obj {
     case "point":
       return { ...o, p: applyAffine(m, o.p) };
     case "label":
-      return { ...o, p: applyAffine(m, o.p) };
+      return { ...o, p: applyAffine(m, o.p), ...(o.follow ? { follow: { ...o.follow, ref: applyAffine(m, o.follow.ref) } } : {}) };
     case "curve":
       return transformCurve(o, m);
   }

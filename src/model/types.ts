@@ -73,6 +73,9 @@ interface Base {
   /** Pieces drawn differently from the rest (see model/parts.ts): each names
    *  a piece by a point on it (chain parameter) and overrides its stroke. */
   parts?: PartStyle[];
+  /** Where the object was cut into pieces when a piece was styled (chain
+   *  parameters): kept so the pieces stay even if what crossed it goes. */
+  cuts?: number[];
 }
 
 export interface PartStyle {
@@ -118,6 +121,10 @@ export interface LabelObj extends Base {
   /** Smart label: the objects it labels. While set, the label is moved to
    *  the best spot once its real size is known (cleared when moved by hand). */
   attach?: string[];
+  /** Labels made with the Label button stay with what they label: when it
+   *  moves, the label moves too (ref: where it was), or with `avoid`, it's
+   *  placed again so it stays clear of lines. */
+  follow?: { ids: string[]; ref: Vec; avoid: boolean; off?: boolean };
 }
 
 /** An anchor of a smooth curve (see model/curve.ts). */
@@ -134,6 +141,9 @@ export interface CurveObj extends Base {
   type: "curve";
   nodes: CurveNode[];
   closed: boolean;
+  /** Text written along the curve instead of a line (TikZ "text along path"). */
+  text?: string;
+  textFont?: FontSize;
 }
 
 export type Obj = PathObj | EllipseObj | PointObj | LabelObj | CurveObj;

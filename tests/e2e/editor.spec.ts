@@ -8,7 +8,7 @@ const PREAMBLE = "\\usepackage{amssymb}\\newcommand{\\Z}{\\mathbb{Z}}\\newcomman
 
 async function setup(page: Page) {
   await page.goto("/");
-  await page.waitForFunction(() => (window as any).__store);
+  await page.waitForFunction(() => (window as any).__store && (window as any).__ready);
   await page.evaluate(async (preamble) => {
     const s = (window as any).__store;
     const settings = { ...s.get().settings, preamble, preambleFile: "", documentClass: "\\documentclass[11pt]{article}" };
@@ -51,9 +51,11 @@ test("draws shapes snapped to the grid and returns to Select", async ({ page }) 
   expect((await state(page)).tool).toBe("select");
 
   // Circle: click centre, click radius point
-  await page.keyboard.press("c");
+  await page.keyboard.press("e"); // ellipse with ⇧: a circle
+  await page.keyboard.down("Shift");
   await page.mouse.click(...(await at(page, 0, 0)));
   await page.mouse.click(...(await at(page, 1.01, 0)));
+  await page.keyboard.up("Shift");
   const c = (await scene(page))[1];
   expect(c.type).toBe("ellipse");
   expect(c.rx).toBeCloseTo(1, 6);
@@ -101,12 +103,12 @@ test("labels: math by default, text with $, errors shown", async ({ page }) => {
   await page.keyboard.press("t");
   await page.mouse.click(...(await at(page, 0, 0)));
   await page.keyboard.type("\\cO_K \\otimes \\Z_p");
-  await expect(page.getByTestId("mode-toggle")).toHaveText("Math");
+  await expect(page.getByTestId("mode-math")).toHaveClass(/active/);
   await page.keyboard.press("Enter");
   await page.keyboard.press("t");
   await page.mouse.click(...(await at(page, 0, -2)));
   await page.keyboard.type("Consider $\\Z$");
-  await expect(page.getByTestId("mode-toggle")).toHaveText("Text");
+  await expect(page.getByTestId("mode-text")).toHaveClass(/active/);
   await page.keyboard.press("Enter");
   // Both labels compile and get an image on the canvas
   await expect(page.locator("svg.canvas image")).toHaveCount(2, { timeout: 20_000 });
@@ -127,8 +129,10 @@ test("saves a .tikz file and opens it again", async ({ page }) => {
   await setup(page);
   const file = path.join(os.tmpdir(), "tikz-editor-e2e-fig", "graphics", "fig.tikz");
   rmSync(path.dirname(file), { recursive: true, force: true });
-  await page.keyboard.press("c");
+  await page.keyboard.press("e"); // ellipse with ⇧: a circle
+  await page.keyboard.down("Shift");
   await drag(page, await at(page, 0, 0), await at(page, 1.5, 0));
+  await page.keyboard.up("Shift");
   await page.keyboard.press("Control+s");
   await page.getByTestId("prompt").locator("input").fill(file);
   await page.keyboard.press("Enter");

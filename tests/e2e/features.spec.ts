@@ -8,7 +8,7 @@ const PREAMBLE = "\\usepackage{amssymb}\\newcommand{\\Z}{\\mathbb{Z}}";
 
 async function setup(page: Page, extra: Record<string, unknown> = {}) {
   await page.goto("/");
-  await page.waitForFunction(() => (window as any).__store);
+  await page.waitForFunction(() => (window as any).__store && (window as any).__ready);
   await page.evaluate(
     async ({ preamble, extra }) => {
       const s = (window as any).__store;
@@ -79,7 +79,8 @@ test("curve tool: place, edit handles, toggle corner, insert and delete anchors"
   });
   void mid;
   // a point on the straight-ish first piece (corner makes it straight): halfway from (-4,0) to (-2,2)
-  await page.mouse.dblclick(...(await at(page, -3, 1)));
+  await page.mouse.move(...(await at(page, -3, 1)), { steps: 2 });
+  await page.keyboard.press("Enter");
   o = (await objs(page))[0];
   expect(o.nodes.length).toBe(before + 1);
   expect((await st(page)).activeNode).toBe(1);
@@ -194,11 +195,13 @@ test("command palette runs commands and finds tools", async ({ page }) => {
 test("library: add a selection, insert it, delete it", async ({ page }) => {
   await setup(page);
   page.on("dialog", (d) => d.accept());
-  await page.keyboard.press("c");
+  await page.keyboard.press("e"); // ellipse with ⇧: a circle
+  await page.keyboard.down("Shift");
   await page.mouse.move(...(await at(page, 0, 0)));
   await page.mouse.down();
   await page.mouse.move(...(await at(page, 1, 0)), { steps: 4 });
   await page.mouse.up();
+  await page.keyboard.up("Shift");
   await page.getByText("Add to library").click();
   await page.getByTestId("prompt").locator("input").fill("unit circle");
   await page.keyboard.press("Enter");
@@ -249,11 +252,13 @@ test("z-order and align", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(...(await at(page, 2, 2)), { steps: 3 });
   await page.mouse.up();
-  await page.keyboard.press("c");
+  await page.keyboard.press("e"); // ellipse with ⇧: a circle
+  await page.keyboard.down("Shift");
   await page.mouse.move(...(await at(page, 5, 3)));
   await page.mouse.down();
   await page.mouse.move(...(await at(page, 6, 3)), { steps: 3 });
   await page.mouse.up();
+  await page.keyboard.up("Shift");
   // circle is selected and on top: send it back
   await page.keyboard.press("Control+BracketLeft");
   expect((await objs(page)).map((o: any) => o.type)).toEqual(["ellipse", "path"]);

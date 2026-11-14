@@ -42,6 +42,12 @@ export interface Settings {
   /** Folder of the figure library. Empty: "library" in the app's data folder. */
   libraryDir: string;
   presets: StylePreset[];
+  /** Show keyboard shortcuts on buttons (master switch), in the toolbar, in the style panel. */
+  showKeys: boolean;
+  showToolbarKeys: boolean;
+  showStyleKeys: boolean;
+  /** Colours made with the colour picker (xcolor expressions), newest first. */
+  customColors: string[];
   /** Tool keys, e.g. { "curve": "B" }; only the ones you change (edit settings.json). */
   toolKeys: Record<string, string>;
 }
@@ -65,6 +71,10 @@ export const DEFAULT_SETTINGS: Settings = {
   libraryDir: "",
   presets: [],
   toolKeys: {},
+  showKeys: true,
+  showToolbarKeys: true,
+  showStyleKeys: true,
+  customColors: [],
 };
 
 export function withDefaults(s: Partial<Settings> | undefined): Settings {

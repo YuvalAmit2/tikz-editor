@@ -90,7 +90,7 @@ function candidates(targets: Obj[], gap: number): Candidate[] {
   };
   if (targets.length === 1) {
     const o = targets[0];
-    if (o.type === "point") around(o.p, gap * 0.8);
+    if (o.type === "point") around(o.p, gap + 0.07);
     if (o.type === "ellipse") {
       // On the ellipse, pushed outwards.
       for (const deg of [45, 0, 90, 135, 315, 180, 270, 225]) {
@@ -167,7 +167,7 @@ export function placeLabel(
   labelBoxOf: (o: LabelObj) => Box | null,
   ignore: string[] = [],
 ): { p: Vec; anchor: Anchor } {
-  const gap = 0.15;
+  const gap = 0.08;
   const ign = new Set(ignore);
   const segs = strokes(scene.filter((o) => o.type !== "label" && !ign.has(o.id)));
   const labels = scene.filter((o): o is LabelObj => o.type === "label" && !ign.has(o.id)).map(labelBoxOf).filter((b): b is Box => !!b);

@@ -51,7 +51,7 @@ On a line of its own a figure is centred. Sizes scale the drawing only; labels k
 | | |
 |---|---|
 | Space (tap) or V | Select |
-| L P B S R C E D T X | Line, Polyline, Curve, Sketch, Rectangle, Circle, Ellipse, Dot, Text, Trim |
+| L P B S R E D T F X | Line, Polyline, Curve, Sketch, Rectangle, Ellipse (⇧: circle), Dot, Text, Fill (paint bucket), Trim |
 | - . | Dashed, dotted (again: solid) |
 | G | Grid snapping on/off |
 | ⇧T | Label the selection (placed next to it, clear of other lines) |
@@ -61,9 +61,12 @@ On a line of its own a figure is centred. Sizes scale the drawing only; labels k
 | Alt (while drawing) | No snapping |
 | Click / double-click a label | Select it (to move it) / edit its text |
 | Double-click a shape | Edit its points |
-| …while editing points | Double-click an anchor: smooth ↔ corner; double-click the line: add a point; ⌫: delete the last clicked point; Alt-drag a handle: move it alone; ⌘-drag: the mirror-image point moves too |
+| …while editing points | ↵: add a point at the dot shown on the line under the mouse; double-click an anchor: smooth ↔ corner; ⌫: delete the last clicked point; Alt-drag a handle: move it alone; ⇧-drag: the mirror-image point moves too |
+| Selection box | Corners and edges scale (⇧: about the centre, ⌘: keep proportions); the knob above rotates (⇧: 15° steps). A corner on a curve's end is a circle: it moves the curve by that point |
+| While drawing a curve or polyline | ⌘Z takes back the last click, ⌫ drops the whole thing |
+| Right-click | Menu: front/back, forward/backward, label, copy, duplicate, flip, library, delete |
 | ⇧H ⇧V ⇧R | Flip horizontally / vertically, rotate 90° |
-| Arrow keys | Nudge by one grid step (Shift: four, Alt: a fifth) |
+| Arrow keys | Nudge by about 15 screen px in grid steps (finer when zoomed in; Shift: four, Alt: a fifth) |
 | ⌘Z ⇧⌘Z ⌘C ⌘V ⌘D ⌘A | Undo, redo, copy, paste, duplicate, select all |
 | ⌘] ⌘[ | Bring to front, send to back |
 | ⌘K | Command palette (every command and library figure) |
@@ -79,7 +82,15 @@ In the text panel: labels are **math by default** (`\cO_K`), but a label contain
 
 **Trim (X):** click a piece of a shape to cut it away up to where it crosses other lines, or drag across several pieces. To cut an ellipse in half, draw a line across it, trim one half, delete the line.
 
-**Pieces:** to style part of a shape (e.g. the hidden half of a sphere's equator dashed), select it and open **Pieces** in the style panel. It lists the stretches between where other lines cross it, named by where they lie ("top", "lower left", …); hovering one highlights it. Pick one or more, and the stroke colour, thickness and dash (including the `-` and `.` keys) apply to just those. **whole** goes back to styling the whole shape. A styled piece follows the crossings when things move.
+**Pieces:** to style part of a shape (e.g. the hidden half of a sphere's equator dashed), select it and open **Pieces** in the style panel. It lists the stretches between where other lines cross it, each drawn as a small picture; hovering one highlights it. Pick one or more, and the stroke colour, thickness and dash (including the `-` and `.` keys) apply to just those. **whole** goes back to styling the whole shape. A styled piece follows the crossings when things move, and stays a piece if the line that cut it is deleted.
+
+**Copy** gives a `tikzpicture` you can paste straight into a document. To keep editing a figure, save it as a `.tikz` file and insert it with `\tikzfig{name}` instead (the command palette also copies the `.tikz` contents or the `\tikzfig` line).
+
+**Labels made with the Label button** (⇧T) stay with what they label. In the style panel, "Keeps clear of lines" decides whether they find a new spot when it moves or just move along with it.
+
+**Text along a curve:** select an open curve and type into "Text along the curve" in the style panel; the curve is replaced by the text (TikZ's `decorations.text`, which `tikzfig.sty` loads; pasted pictures need `\usetikzlibrary{decorations.text}`).
+
+**Colours:** the rainbow swatch opens a colour picker (hex too); colours you make are kept as swatches (right-click one to remove it). They're written as `{rgb,255:red,…}`, which needs no extra package.
 
 **Grid snapping** is magnetic per axis: near a grid line, that coordinate sticks to it and the other one stays free, so you can slide along a grid line.
 

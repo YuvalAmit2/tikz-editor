@@ -6,7 +6,7 @@
 //     height of the drawing in cm (labels excluded), used by \tikzfig's
 //     width=/height= options to compute the scale.
 import { labelBody, labelNodeOpts } from "../labels/mode";
-import { sceneGeomBox } from "../model/geometry";
+import { sceneGeomBox, transformObj, translation } from "../model/geometry";
 import { curveSegments } from "../model/curve";
 import { styledRuns } from "../model/parts";
 import type { Obj, Scene, Style } from "../model/types";
@@ -55,6 +55,15 @@ function partedToTikz(o: Obj, others: Obj[]): string | null {
 }
 
 function objToTikz(o: Obj, others: Obj[] = []): string | null {
+  if (o.type === "curve" && o.text) {
+    const segs = curveSegments(o);
+    if (!segs.length) return null;
+    let body = coord(segs[0].a);
+    for (const s of segs) body += ` .. controls ${coord(s.c1)} and ${coord(s.c2)} .. ${coord(s.b)}`;
+    const fmtTxt = [o.textFont, o.style.stroke && o.style.stroke !== "black" ? `\\color{${o.style.stroke}}` : ""].filter(Boolean).join("");
+    const text = (fmtTxt ? `|${fmtTxt}|` : "") + o.text;
+    return `\\path[decorate,decoration={text along path,text={${text}},text align=center}] ${body};`;
+  }
   if (o.parts?.length && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) {
     const t = partedToTikz(o, others);
     if (t !== null) return t;
@@ -116,6 +125,23 @@ export function sceneToTikz(scene: Scene): string {
   }
   lines.push("\\end{tikzfigure}", "");
   return lines.join("\n");
+}
+
+/** A plain tikzpicture to paste straight into a document: moved so the
+ *  drawing is centred on the origin, without the editor's scene line. */
+export function sceneToPicture(scene: Scene): string {
+  const box = sceneGeomBox(scene.objects);
+  const m = box ? translation(-Math.round(((box.minX + box.maxX) / 2) * 4) / 4, -Math.round(((box.minY + box.maxY) / 2) * 4) / 4) : null;
+  const objs = m ? scene.objects.map((o) => transformObj(o, m)) : scene.objects;
+  const lines: string[] = [];
+  if (objs.some((o) => o.type === "curve" && o.text)) lines.push("% needs \\usetikzlibrary{decorations.text}");
+  lines.push("\\begin{tikzpicture}");
+  for (const o of objs) {
+    const t = objToTikz(o, objs);
+    if (t) lines.push(t);
+  }
+  lines.push("\\end{tikzpicture}");
+  return lines.join("\n") + "\n";
 }
 
 /** Read the scene back from a .tikz file written by sceneToTikz. */

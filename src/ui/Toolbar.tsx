@@ -14,15 +14,17 @@ export const TOOLS: { tool: ToolName; key: string; label: string; icon: React.Re
   { tool: "curve", key: "B", label: "Curve through points", icon: <I><path d="M3 15C5 4 9 4 10 10s5 6 7-5" /><circle cx="3" cy="15" r="1.2" fill="currentColor" /><circle cx="10" cy="10" r="1.2" fill="currentColor" /><circle cx="17" cy="5" r="1.2" fill="currentColor" /></I> },
   { tool: "sketch", key: "S", label: "Sketch (smooths your stroke)", icon: <I><path d="M3 14c2-1 2-6 5-6s1 7 4 6 2-8 5-8" /></I> },
   { tool: "rect", key: "R", label: "Rectangle", icon: <I><rect x="3.5" y="5" width="13" height="10" /></I> },
-  { tool: "circle", key: "C", label: "Circle", icon: <I><circle cx="10" cy="10" r="6.5" /></I> },
-  { tool: "ellipse", key: "E", label: "Ellipse", icon: <I><ellipse cx="10" cy="10" rx="7.5" ry="4.5" /></I> },
+  { tool: "ellipse", key: "E", label: "Ellipse (⇧ for a circle)", icon: <I><ellipse cx="10" cy="10" rx="7.5" ry="4.5" /></I> },
   { tool: "point", key: "D", label: "Point (dot)", icon: <I><circle cx="10" cy="10" r="2.5" fill="currentColor" /></I> },
   { tool: "text", key: "T", label: "Text / math label", icon: <I><path d="M5 5h10M10 5v11" /></I> },
+  { tool: "fill", key: "F", label: "Paint bucket: click inside a closed region to fill it", icon: <I><path d="M4 9l6-6 6 6-6 6z" /><path d="M16 12c1 1.5 1.5 2.5 1.5 3.2a1.5 1.5 0 01-3 0c0-.7.5-1.7 1.5-3.2z" fill="currentColor" stroke="none" /></I> },
   { tool: "trim", key: "X", label: "Trim: click a piece, or drag across pieces, to cut it away at the crossings", icon: <I><circle cx="6" cy="14" r="2.3" /><circle cx="14" cy="14" r="2.3" /><path d="M7.5 12.3L15 3M12.5 12.3L5 3" /></I> },
 ];
 
 /** A toolbar button with its shortcut written under it. */
-function Btn({ k, title, active, disabled, onClick, children, testid }: { k?: string; title: string; active?: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode; testid?: string }) {
+function Btn({ k: key, title, active, disabled, onClick, children, testid }: { k?: string; title: string; active?: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode; testid?: string }) {
+  const show = useStore((s) => s.settings.showKeys && s.settings.showToolbarKeys);
+  const k = show ? key : undefined;
   return (
     <button className={"tool" + (active ? " active" : "")} title={title} disabled={disabled} onClick={onClick} data-testid={testid}>
       {children}
@@ -91,7 +93,7 @@ export function Toolbar() {
         <button className="text-btn" title="New figure (⌘N)" onClick={newFigure}>New</button>
         <button className="text-btn" title="Open (⌘O)" onClick={open}>Open</button>
         <button className="text-btn primary" title="Save (⌘S)" onClick={() => save()}>Save</button>
-        <button className="text-btn" title="Copy the TikZ code" data-testid="copy-tikz" onClick={copyTikz}>Copy</button>
+        <button className="text-btn" title="Copy a tikzpicture to paste into your document" data-testid="copy-tikz" onClick={copyTikz}>Copy</button>
         <Btn k="⌘K" title="Commands (⌘K)" onClick={() => store.set({ palette: true })}>
           <span className="glyph">⌘</span>
         </Btn>

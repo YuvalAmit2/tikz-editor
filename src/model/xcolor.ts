@@ -23,7 +23,12 @@ const BASE: Record<string, [number, number, number]> = {
   violet: [0.5, 0, 0.5],
 };
 
+/** {rgb,255:red,R;green,G;blue,B}, as made by the colour picker. */
+const RGB255 = /^\{?rgb,255:red,(\d+);green,(\d+);blue,(\d+)\}?$/;
+
 export function xcolorRgb(expr: string): [number, number, number] {
+  const m = expr.trim().match(RGB255);
+  if (m) return [+m[1] / 255, +m[2] / 255, +m[3] / 255];
   const parts = expr.split("!").map((s) => s.trim());
   let cur = BASE[parts[0]] ?? [0, 0, 0];
   let i = 1;
@@ -43,5 +48,8 @@ export function xcolorCss(expr: string | null): string {
 }
 
 /** Colours offered in the style panel (all valid xcolor without extra packages). */
-export const PALETTE = ["black", "gray", "red", "orange", "green!60!black", "blue", "violet", "teal"];
+export const PALETTE = ["black", "gray", "red", "orange", "green!60!black", "blue", "violet", "brown", "white"];
 export const TINTS = [15, 30, 60, 100];
+
+/** A colour made with the colour picker (no tints: they're picked directly). */
+export const isCustomColor = (c: string | null) => !!c && RGB255.test(c.trim());

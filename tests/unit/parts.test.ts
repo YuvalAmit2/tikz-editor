@@ -18,14 +18,14 @@ describe("pieces", () => {
     const { chain, comps } = components(equator, [sphere]);
     const names = componentNames(equator, chain!, comps);
     const top = comps[names.indexOf("top")].mid;
-    const parts = withPartStyle(equator, [sphere], [top], { dash: "dashed" });
+    const { parts, cuts } = withPartStyle(equator, [sphere], [top], { dash: "dashed" });
     expect(parts).toHaveLength(1);
-    const runs = styledRuns({ ...equator, parts }, [sphere])!;
+    const runs = styledRuns({ ...equator, parts, cuts }, [sphere])!;
     expect(runs).toHaveLength(2);
     const dashed = runs.find((r) => r.style.dash === "dashed")!;
     for (const p of dashed.pieces) expect(p.c1.y + p.c2.y).toBeGreaterThan(-1e-9);
     // Setting it back to solid removes the part
-    expect(withPartStyle({ ...equator, parts }, [sphere], [top], { dash: "solid" })).toHaveLength(0);
+    expect(withPartStyle({ ...equator, parts, cuts }, [sphere], [top], { dash: "solid" }).parts).toBeUndefined();
   });
 
   it("a line cut by two others: three pieces; neighbours with the same look are joined", () => {
@@ -34,9 +34,19 @@ describe("pieces", () => {
     const others = [v("a", 2), v("b", 4)];
     const { comps } = components(l, others);
     expect(comps.map((c) => [c.s0, c.s1])).toEqual([[0, 1 / 3], [1 / 3, 2 / 3], [2 / 3, 1]].map(([a, b]) => [expect.closeTo(a, 6), expect.closeTo(b, 6)]));
-    const parts = withPartStyle(l, others, [comps[1].mid], { stroke: "red" });
-    const runs = styledRuns({ ...l, parts }, others)!;
+    const { parts, cuts } = withPartStyle(l, others, [comps[1].mid], { stroke: "red" });
+    const runs = styledRuns({ ...l, parts, cuts }, others)!;
     expect(runs.map((r) => r.style.stroke)).toEqual(["black", "red", "black"]);
     expect(runs[0].first && runs[2].last).toBe(true);
+  });
+
+  it("a styled piece stays when what cut it is deleted", () => {
+    const line: PathObj = { id: "l", type: "path", style: st, closed: false, pts: [{ x: -3, y: 0 }, { x: 3, y: 0 }] };
+    const { comps } = components(sphere, [line]);
+    expect(comps).toHaveLength(2);
+    const { parts, cuts } = withPartStyle(sphere, [line], [comps[0].mid], { stroke: "red" });
+    const alone = { ...sphere, parts, cuts };
+    expect(components(alone, []).comps).toHaveLength(2);
+    expect(styledRuns(alone, [])!.map((r) => r.style.stroke).sort()).toEqual(["black", "red"]);
   });
 });

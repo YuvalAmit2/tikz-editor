@@ -54,7 +54,7 @@ const boxOfObjs = (objs: Obj[]): Box | null => {
 export async function saveSelectionToLibrary() {
   const sel = store.selected();
   if (sel.length === 0) return store.flash("Select what to save first");
-  const name = await askText("Save to library", { placeholder: "e.g. torus", ok: "Save" });
+  const name = await askText("Save to library", { ok: "Save" });
   if (!name) return;
   if (items.some((i) => i.name.toLowerCase() === name.toLowerCase()) && !window.confirm(`Replace “${name}” in the library?`)) return;
   const b = boxOfObjs(sel)!;
@@ -77,9 +77,10 @@ export async function deleteLibraryItem(item: LibraryItem) {
 }
 
 /** Place a copy at the middle of the view (snapped to the grid), selected. */
-export function insertLibraryItem(item: LibraryItem) {
+export function insertLibraryItem(item: LibraryItem, where?: { x: number; y: number } | null) {
   const s = store.get();
-  const at = s.settings.snapToGrid ? snapGrid({ x: s.view.cx, y: s.view.cy }, s.settings.gridSize) : { x: s.view.cx, y: s.view.cy };
+  const c = where ?? { x: s.view.cx, y: s.view.cy };
+  const at = s.settings.snapToGrid ? snapGrid(c, s.settings.gridSize) : c;
   const m = translation(at.x, at.y);
   const copies = item.objects.map((o) => ({ ...transformObj(o, m), id: newId() }));
   store.commit({ ...s.scene, objects: [...s.scene.objects, ...copies] }, { selection: copies.map((o) => o.id), tool: "select", pointEdit: null, editingLabel: null });

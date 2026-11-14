@@ -6,10 +6,11 @@ import type { Settings } from "./model/settings";
 import { emptyScene, newId, type Dash, type LabelObj, type Obj, type Style } from "./model/types";
 import { placeLabel } from "./model/labelPlace";
 import { componentAt, components, componentStyles, withPartStyle } from "./model/parts";
-import { sceneToTikz, tikzToScene } from "./tikz/export";
+import { sceneToPicture, sceneToTikz, tikzToScene } from "./tikz/export";
 import { cancelDraft, selectionBox } from "./tools/controller";
 import { askText, store, TRUE_ZOOM, type ToolName } from "./store";
 import { labelBox } from "./labels/render";
+import { followRef } from "./smartLabels";
 
 export function setTool(tool: ToolName) {
   cancelDraft();
@@ -24,8 +25,8 @@ export function applyStyle(patch: Partial<Style>, extra: Partial<Obj> = {}) {
   const ps = activePieces();
   if (ps) {
     const o = sel[0];
-    const parts = withPartStyle(o, s.scene.objects, ps, patch);
-    store.commit(store.withReplaced([{ ...o, parts: parts.length ? parts : undefined } as Obj]));
+    const { parts, cuts } = withPartStyle(o, s.scene.objects, ps, patch);
+    store.commit(store.withReplaced([{ ...o, parts, cuts } as Obj]));
     return;
   }
   // Labels have no fill; their colour shouldn't turn the next shape's fill off.
@@ -66,20 +67,37 @@ export function copy() {
   clipboard = store.selected();
 }
 
+/** About 20 screen px, in whole grid steps (or halves of one when zoomed in). */
+function pasteOffset(): number {
+  const { settings, view } = store.get();
+  const g = settings.gridSize;
+  return Math.min(2 * g, g * Math.pow(2, Math.round(Math.log2(20 / (g * view.zoom)))));
+}
+
 function pasteObjs(objs: Obj[], offset: number) {
   if (objs.length === 0) return;
   const s = store.get();
-  const m = translation(offset, -offset);
+  let m = translation(offset, -offset);
+  // Off screen (e.g. zoomed in elsewhere): put it in the middle of the view.
+  let b: Box | null = null;
+  for (const o of objs) b = unionBox(b, objBox(transformObj(o, m)));
+  if (b) {
+    const { w, h } = canvasSize();
+    const v = s.view;
+    const view = { minX: v.cx - w / 2 / v.zoom, maxX: v.cx + w / 2 / v.zoom, minY: v.cy - h / 2 / v.zoom, maxY: v.cy + h / 2 / v.zoom };
+    const seen = b.maxX > view.minX && b.minX < view.maxX && b.maxY > view.minY && b.minY < view.maxY;
+    if (!seen) m = translation(v.cx - (b.minX + b.maxX) / 2 + offset, v.cy - (b.minY + b.maxY) / 2 - offset);
+  }
   const copies = objs.map((o) => ({ ...transformObj(o, m), id: newId() }));
   store.commit({ ...s.scene, objects: [...s.scene.objects, ...copies] }, { selection: copies.map((o) => o.id), tool: "select" });
 }
 
 export function paste() {
-  pasteObjs(clipboard, store.get().settings.gridSize * 2);
+  pasteObjs(clipboard, pasteOffset());
 }
 
 export function duplicate() {
-  pasteObjs(store.selected(), store.get().settings.gridSize * 2);
+  pasteObjs(store.selected(), pasteOffset());
 }
 
 function transformSelection(make: (b: Box) => ReturnType<typeof scalingAbout>) {
@@ -232,18 +250,35 @@ export function copyTikzfigCommand() {
   void toClipboard(`\\tikzfig{${name}}`, `\\tikzfig{${name}}`);
 }
 
+/** A tikzpicture you can paste into a document as it is. */
 export function copyTikz() {
-  void toClipboard(sceneToTikz(store.get().scene), "the TikZ code");
+  void toClipboard(sceneToPicture(store.get().scene), "a tikzpicture (paste it into your document)");
 }
 
-/** Bring the selection to the front (drawn last) or send it to the back. */
-export function reorder(where: "front" | "back") {
+/** What a .tikz file holds (for \\tikzfig; reopens in the editor). */
+export function copyTikzFile() {
+  void toClipboard(sceneToTikz(store.get().scene), "the .tikz file contents");
+}
+
+/** Bring the selection to the front (drawn last) or send it to the back,
+ *  or one step forward / backward. */
+export function reorder(where: "front" | "back" | "forward" | "backward") {
   const s = store.get();
   const sel = new Set(s.selection);
   if (sel.size === 0) return;
   const a = s.scene.objects.filter((o) => sel.has(o.id));
   const b = s.scene.objects.filter((o) => !sel.has(o.id));
-  store.commit({ ...s.scene, objects: where === "front" ? [...b, ...a] : [...a, ...b] });
+  if (where === "front" || where === "back") return store.commit({ ...s.scene, objects: where === "front" ? [...b, ...a] : [...a, ...b] });
+  // One step: past the next object (that isn't selected) above / below.
+  const objs = [...s.scene.objects];
+  const idx = objs.map((o, i) => (sel.has(o.id) ? i : -1)).filter((i) => i >= 0);
+  const order = where === "forward" ? [...idx].reverse() : idx;
+  for (const i of order) {
+    const j = where === "forward" ? i + 1 : i - 1;
+    if (j < 0 || j >= objs.length || sel.has(objs[j].id)) continue;
+    [objs[i], objs[j]] = [objs[j], objs[i]];
+  }
+  store.commit({ ...s.scene, objects: objs });
 }
 
 const objBox = (o: Obj): Box | null => (o.type === "label" ? labelBox(o) : geomBox(o));
@@ -308,6 +343,7 @@ export function smartLabel() {
     anchor,
     font: font as LabelObj["font"],
     attach: targets.map((t) => t.id),
+    follow: { ids: targets.map((t) => t.id), ref: followRef(targets)!, avoid: true },
   };
   setTool("select");
   store.commit({ ...s.scene, objects: [...s.scene.objects, o] }, { selection: [o.id], editingLabel: o.id });

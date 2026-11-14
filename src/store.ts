@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, type Settings } from "./model/settings";
 import type { SnapResult } from "./model/snap";
 import { DEFAULT_STYLE, emptyScene, type Obj, type Scene, type Style } from "./model/types";
 
-export type ToolName = "select" | "line" | "polyline" | "curve" | "sketch" | "rect" | "circle" | "ellipse" | "point" | "text" | "trim";
+export type ToolName = "select" | "line" | "polyline" | "curve" | "sketch" | "rect" | "circle" | "ellipse" | "fill" | "point" | "text" | "trim";
 
 export interface View {
   /** World point (cm) at the centre of the canvas. */
@@ -60,6 +60,8 @@ export interface AppState {
   pieceSel: { id: string; ats: number[] } | null;
   /** The piece under the mouse in the panel (highlighted on the canvas). */
   pieceHover: { id: string; at: number } | null;
+  /** Right-click menu, at a screen position. */
+  menu: { x: number; y: number } | null;
 }
 
 type Listener = () => void;
@@ -92,6 +94,7 @@ class Store {
     hoverCursor: null,
     pieceSel: null,
     pieceHover: null,
+    menu: null,
   };
   private listeners = new Set<Listener>();
   private undoStack: Scene[] = [];
@@ -110,6 +113,9 @@ class Store {
     return () => this.listeners.delete(l);
   };
 
+  /** Applied to every new scene (labels that follow their objects). */
+  sceneHook: ((s: Scene) => Scene) | null = null;
+
   /** Replace the scene and record the previous one for undo. `before`
    *  overrides the recorded state (used when a drag previewed changes
    *  without recording them). */
@@ -117,11 +123,13 @@ class Store {
     this.undoStack.push(before ?? this.state.scene);
     if (this.undoStack.length > 500) this.undoStack.shift();
     this.redoStack = [];
+    if (this.sceneHook) scene = this.sceneHook(scene);
     this.set({ scene, dirty: true, ...extra });
   }
 
   /** Change the scene without recording history (live previews). */
   preview(scene: Scene) {
+    if (this.sceneHook) scene = this.sceneHook(scene);
     this.set({ scene });
   }
 

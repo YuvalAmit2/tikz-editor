@@ -61,7 +61,9 @@ export function TextPanel() {
       suggestOnTriggerCharacters: false,
       tabCompletion: "on",
       snippetSuggestions: "top",
-      suggest: { showWords: false, showIcons: false, preview: true },
+      // As in VS Code: suggestions keep coming while inside a snippet's fields
+      // (so one snippet can go inside another).
+      suggest: { showWords: false, showIcons: false, preview: true, snippetsPreventQuickSuggestions: false },
       wordBasedSuggestions: "off",
       contextmenu: false,
       fixedOverflowWidgets: true,
@@ -136,15 +138,14 @@ export function TextPanel() {
       <div className="textpanel-head">
         <span className="title">Label</span>
         {label && (
-          <button
-            className={"mode-toggle" + (mode === "math" ? " math" : " text")}
-            title={mode === "text-auto" ? "Text, because it contains $…$" : "Math or text (⌘T)"}
-            data-testid="mode-toggle"
-            onClick={toggleTextMode}
-            disabled={mode === "text-auto"}
-          >
-            {mode === "math" ? "Math" : "Text"}
-          </button>
+          <span className="mode-seg" data-testid="mode-toggle" title={mode === "text-auto" ? "Text, because it contains $…$" : "Math or text (⌘T)"}>
+            <button className={mode === "math" ? "active" : ""} disabled={mode === "text-auto"} onClick={() => mode !== "math" && toggleTextMode()} data-testid="mode-math">
+              Math
+            </button>
+            <button className={mode !== "math" ? "active" : ""} disabled={mode === "text-auto"} onClick={() => mode === "math" && toggleTextMode()} data-testid="mode-text">
+              Text
+            </button>
+          </span>
         )}
         {entry?.status === "pending" && <span className="muted small">compiling…</span>}
         {entry?.status === "error" && (

@@ -26,7 +26,7 @@ export function components(o: Obj, others: Obj[]): { chain: Chain | null; comps:
   if (chain) {
     const n = chain.pieces.length;
     const eps = 1e-4;
-    let xs = crossings(chain, cutters(others.filter((x) => x.id !== o.id)));
+    let xs = [...crossings(chain, cutters(others.filter((x) => x.id !== o.id))), ...(o.cuts ?? [])].sort((a, b) => a - b);
     // Crossings very close together are one (a curve touching another one,
     // like a sphere's equator touching its outline, crosses the outline's
     // polyline twice right next to each other): use their middle.
@@ -164,9 +164,9 @@ export function componentNames(o: Obj, chain: Chain, comps: Component[]): string
 
 /** Parts after giving the components at `ats` a style change. Parts whose
  *  look ends up the same as the whole object's are dropped. */
-export function withPartStyle(o: Obj, others: Obj[], ats: number[], patch: Partial<Style>): PartStyle[] {
+export function withPartStyle(o: Obj, others: Obj[], ats: number[], patch: Partial<Style>): { parts?: PartStyle[]; cuts?: number[] } {
   const { chain, comps } = components(o, others);
-  if (!chain) return o.parts ?? [];
+  if (!chain) return { parts: o.parts, cuts: o.cuts };
   const n = chain.pieces.length;
   const keep = (o.parts ?? []).map((p) => ({ ...p, style: { ...p.style } }));
   const pick = (({ stroke, width, dash }) => {
@@ -183,11 +183,23 @@ export function withPartStyle(o: Obj, others: Obj[], ats: number[], patch: Parti
     if (ex) Object.assign(ex.style, pick);
     else keep.push({ at: comps[k].mid % n, style: { ...pick } });
   }
-  return keep
+  const parts = keep
     .map((p) => {
       const st: PartStyle["style"] = {};
       for (const key of ["stroke", "width", "dash"] as const) if (p.style[key] !== undefined && p.style[key] !== o.style[key]) (st as any)[key] = p.style[key];
       return { ...p, style: st };
     })
     .filter((p) => Object.keys(p.style).length > 0);
+  if (!parts.length) return { parts: undefined, cuts: undefined };
+  // Remember the ends of the styled pieces, so they stay pieces even when
+  // what cut them is moved away or deleted.
+  const cuts = new Set<number>();
+  for (const p of parts) {
+    const k = componentAt(comps, p.at, n);
+    if (k < 0) continue;
+    const c = comps[k];
+    if (chain.closed || c.s0 > 1e-9) cuts.add(Math.round((c.s0 % n) * 1e6) / 1e6);
+    if (chain.closed || c.s1 < n - 1e-9) cuts.add(Math.round((c.s1 % n) * 1e6) / 1e6);
+  }
+  return { parts, cuts: cuts.size ? [...cuts].sort((a, b) => a - b) : undefined };
 }

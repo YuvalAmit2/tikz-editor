@@ -16,20 +16,25 @@ let registered = false;
 export const currentSnippets = () => snippets;
 
 /** (Re)load the snippet file. Errors leave the previous snippets in place. */
+let loads = 0;
+
 export async function loadSnippets(path: string): Promise<void> {
   register();
+  const me = ++loads;
   if (!path) {
     snippets = [];
     return;
   }
   try {
     const text = await call<string>("readFile", { path });
+    // A newer load (e.g. the snippet file was changed) wins.
+    if (me !== loads) return;
     if (text === lastText && path === lastPath) return;
     snippets = snippetsFromJson(parseJsonc(text));
     lastText = text;
     lastPath = path;
   } catch {
-    if (path !== lastPath) snippets = [];
+    if (me === loads && path !== lastPath) snippets = [];
   }
 }
 

@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function setup(page: Page) {
   await page.goto("/");
-  await page.waitForFunction(() => (window as any).__store);
+  await page.waitForFunction(() => (window as any).__store && (window as any).__ready);
   await page.evaluate(async () => {
     const s = (window as any).__store;
     const settings = { ...s.get().settings, preamble: "", preambleFile: "", documentClass: "\\documentclass[11pt]{article}", presets: [], recognizeShapes: true, showGrid: true, snapToGrid: true, snapToObjects: true, returnToSelect: true, gridSize: 0.25, snippetFile: "", toolKeys: {}, showTextWidthGuide: true, textWidthCm: 10 };
@@ -35,7 +35,7 @@ const box = (o: any) => {
   return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
 };
 
-test("selection box: edge handles scale one way, ⌘ scales about the centre, the knob rotates", async ({ page }) => {
+test("selection box: edge handles scale one way, ⇧ scales about the centre, the knob rotates", async ({ page }) => {
   await setup(page);
   await rect(page, [0, 0], [2, 1]);
   await expect(page.getByTestId("edge-handle")).toHaveCount(4);
@@ -43,8 +43,8 @@ test("selection box: edge handles scale one way, ⌘ scales about the centre, th
   // East edge (2, 0.5) out to 3: only x changes
   await drag(page, [2, 0.5], [3, 0.8]);
   expect(box((await objs(page))[0])).toEqual({ minX: 0, maxX: 3, minY: 0, maxY: 1 });
-  // ⌘ + NE corner: both sides move
-  await drag(page, [3, 1], [3.5, 1.5], "Meta");
+  // ⇧ + NE corner: both sides move
+  await drag(page, [3, 1], [3.5, 1.5], "Shift");
   expect(box((await objs(page))[0])).toEqual({ minX: -0.5, maxX: 3.5, minY: -0.5, maxY: 1.5 });
   // Rotate 90° (⇧ snaps to 15°) about the centre (1.5, 0.5)
   const knob = await page.getByTestId("rotate-handle").boundingBox();
@@ -75,17 +75,17 @@ test("easier selecting: a click a little off the line selects it, and inside the
   expect(box((await objs(page))[1])).toEqual({ minX: 1, maxX: 3, minY: 1, maxY: 2 });
 });
 
-test("⌘-mirror: letting go of ⌘ mid-drag keeps the mirrored point where it is", async ({ page }) => {
+test("⇧-mirror: letting go of ⇧ mid-drag keeps the mirrored point where it is", async ({ page }) => {
   await setup(page);
   await page.keyboard.press("l");
   await page.mouse.click(...(await at(page, -1, 0)));
   await page.mouse.click(...(await at(page, 1, 0)));
   await page.mouse.dblclick(...(await at(page, 0.5, 0)));
   await page.mouse.move(...(await at(page, 1, 0)));
-  await page.keyboard.down("Meta");
+  await page.keyboard.down("Shift");
   await page.mouse.down();
   await page.mouse.move(...(await at(page, 2, 0)), { steps: 4 });
-  await page.keyboard.up("Meta");
+  await page.keyboard.up("Shift");
   await page.mouse.move(...(await at(page, 2.5, 0)), { steps: 4 });
   await page.mouse.up();
   expect((await objs(page))[0].pts).toEqual([
@@ -94,7 +94,7 @@ test("⌘-mirror: letting go of ⌘ mid-drag keeps the mirrored point where it i
   ]);
 });
 
-test("control points: the toggle edits the curve; hovering shows where a double-click adds a node, on the grid", async ({ page }) => {
+test("control points: the toggle edits the curve; hovering shows where ↵ adds a node, on the grid", async ({ page }) => {
   await setup(page);
   await page.keyboard.press("b");
   for (const [x, y] of [[-2, 0], [0, 2], [2, 0]]) await page.mouse.click(...(await at(page, x, y)));
@@ -102,14 +102,14 @@ test("control points: the toggle edits the curve; hovering shows where a double-
   await page.getByTestId("show-controls").check();
   const s = await st(page);
   expect(s.pointEdit).toBe(s.selection[0]);
-  await expect(page.locator(".statusbar")).toContainText("Double-click the line");
+  await expect(page.locator(".statusbar")).toContainText("↵ adds a point");
   // Hover near the curve at x ≈ 1.03: the hint sits on the curve at x = 1 (a grid line)
   const o = (await objs(page))[0];
   await page.mouse.move(...(await at(page, 1.03, 1.55)), { steps: 3 });
   await expect(page.getByTestId("insert-hint")).toHaveCount(1);
   const hint = (await st(page)).insertHint;
   expect(hint.x).toBeCloseTo(1, 6);
-  await page.mouse.dblclick(...(await at(page, 1.03, 1.55)));
+  await page.keyboard.press("Enter");
   const after = (await objs(page))[0];
   expect(after.nodes).toHaveLength(o.nodes.length + 1);
   expect(after.nodes[2].p.x).toBeCloseTo(1, 6);

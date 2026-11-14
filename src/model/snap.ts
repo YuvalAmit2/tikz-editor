@@ -14,7 +14,7 @@ import {
 import type { EllipseObj, Obj, Vec } from "./types";
 import { sampleCurve } from "./curve";
 
-export type SnapKind = "vertex" | "midpoint" | "center" | "quadrant" | "intersection" | "on-object" | "grid" | "angle" | "none";
+export type SnapKind = "vertex" | "midpoint" | "center" | "quadrant" | "intersection" | "grid-crossing" | "on-object" | "grid" | "angle" | "none";
 
 export interface SnapResult {
   p: Vec;
@@ -175,6 +175,41 @@ export function snap(p: Vec, index: SnapIndex | null, o: SnapOptions): SnapResul
       }
     }
     if (best) return best;
+    // A point on an object that's also on a grid line beats either alone
+    // (when the object is near enough to snap onto at all).
+    const near = o.radius * 0.6;
+    if (o.snapToGrid) {
+      const g = o.gridPx ? visibleGrid(o.gridSize, o.gridPx) : o.gridSize;
+      const segs: [Vec, Vec][] = index.segments.filter(([a, b]) => dist(closestOnSegment(p, a, b), p) < near);
+      for (const e of index.ellipses) {
+        const poly = ellipsePolyline(e, 128);
+        poly.forEach((a, k) => {
+          const b = poly[(k + 1) % poly.length];
+          if (dist(closestOnSegment(p, a, b), p) < near) segs.push([a, b]);
+        });
+      }
+      let bestG: Vec | null = null;
+      let bg = o.radius;
+      for (const [a, b] of segs)
+        for (const axis of ["x", "y"] as const) {
+          const lo = Math.max(Math.min(a[axis], b[axis]), p[axis] - o.radius);
+          const hi = Math.min(Math.max(a[axis], b[axis]), p[axis] + o.radius);
+          if (Math.abs(b[axis] - a[axis]) < 1e-12) continue;
+          for (let k = Math.ceil(lo / g - 1e-9); k * g <= hi + 1e-9; k++) {
+            const v = k * g + 0;
+            const t = (v - a[axis]) / (b[axis] - a[axis]);
+            if (t < -1e-9 || t > 1 + 1e-9) continue;
+            const c = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+            c[axis] = v;
+            const d = dist(c, p);
+            if (d < bg) {
+              bg = d;
+              bestG = c;
+            }
+          }
+        }
+      if (bestG) return { p: bestG, kind: "grid-crossing" };
+    }
     let bestOn: Vec | null = null;
     bd = o.radius * 0.6;
     for (const [a, b] of index.segments) {

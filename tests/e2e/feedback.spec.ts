@@ -5,7 +5,7 @@ const PREAMBLE = "\\usepackage{amssymb}";
 
 async function setup(page: Page, extra: Record<string, unknown> = {}) {
   await page.goto("/");
-  await page.waitForFunction(() => (window as any).__store);
+  await page.waitForFunction(() => (window as any).__store && (window as any).__ready);
   await page.evaluate(
     async ({ preamble, extra }) => {
       const s = (window as any).__store;
@@ -98,9 +98,11 @@ test("grid lines are magnetic: dragging along a vertical line keeps x, y moves f
 
 test("trim: a line through a circle, click the top half away", async ({ page }) => {
   await setup(page);
-  await page.keyboard.press("c");
+  await page.keyboard.press("e"); // ellipse with ⇧: a circle
+  await page.keyboard.down("Shift");
   await page.mouse.click(...(await at(page, 0, 0)));
   await page.mouse.click(...(await at(page, 2, 0)));
+  await page.keyboard.up("Shift");
   await line(page, [-3, 0], [3, 0]);
   await page.keyboard.press("x");
   await page.mouse.move(...(await at(page, 0, 2)));
@@ -124,16 +126,16 @@ test("trim: a line through a circle, click the top half away", async ({ page }) 
   expect((await objs(page)).find((o: any) => o.type === "path").pts[0].x).toBe(-3);
 });
 
-test("symmetric editing: ⌘-drag a line's end grows it from both ends", async ({ page }) => {
+test("symmetric editing: ⇧-drag a line's end grows it from both ends", async ({ page }) => {
   await setup(page);
   await line(page, [-1, 0], [1, 0]);
   await page.mouse.dblclick(...(await at(page, 0.5, 0)));
-  await page.keyboard.down("Meta");
+  await page.keyboard.down("Shift");
   await page.mouse.move(...(await at(page, 1, 0)));
   await page.mouse.down();
   await page.mouse.move(...(await at(page, 2, 0)), { steps: 5 });
   await page.mouse.up();
-  await page.keyboard.up("Meta");
+  await page.keyboard.up("Shift");
   expect((await objs(page))[0].pts).toEqual([
     { x: -2, y: 0 },
     { x: 2, y: 0 },
@@ -192,13 +194,19 @@ test("settings: Esc saves and closes; Copy button copies TikZ", async ({ page })
   await expect(page.getByTestId("settings-save")).toBeInViewport();
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1280, height: 820 });
+  // Let the canvas take its size again before clicking on it.
+  await page.waitForTimeout(300);
   // Record what's written (the real clipboard is shared with the rest of the system).
   await page.evaluate(() => {
     (navigator.clipboard as any).writeText = async (t: string) => void ((window as any).__copied = t);
   });
   await line(page, [0, 0], [1, 0]);
   await page.getByTestId("copy-tikz").click();
-  await expect.poll(() => page.evaluate(() => (window as any).__copied ?? "")).toContain("\\path[draw] (0,0) -- (1,0);");
+  // A tikzpicture to paste as it is, centred on the origin
+  await expect.poll(() => page.evaluate(() => (window as any).__copied ?? "")).toContain("\\path[draw] (-0.5,0) -- (0.5,0);");
+  const copied: string = await page.evaluate(() => (window as any).__copied);
+  expect(copied.startsWith("\\begin{tikzpicture}")).toBe(true);
+  expect(copied).not.toContain("tikz-editor-scene");
 });
 
 test("snippets: Enter accepts the suggestion, the next Enter finishes the label", async ({ page }) => {

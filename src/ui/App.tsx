@@ -28,7 +28,8 @@ import { DEFAULT_SNIPPET_FILE, withDefaults, type Settings } from "../model/sett
 import { loadSnippets } from "./snippets";
 import { initSmartLabels } from "../smartLabels";
 import { LINE_WIDTHS } from "../model/types";
-import { cancelDraft, deleteActiveNode, finishCurve, finishPolyline, hasDraft, removeLastDraftPoint, setSpaceDown, spaceWasUsed } from "../tools/controller";
+import { cancelDraft, deleteActiveNode, finishCurve, finishPolyline, hasDraft, insertAtHint, removeLastDraftPoint, setSpaceDown, spaceWasUsed } from "../tools/controller";
+import { ContextMenu } from "./ContextMenu";
 import { smartLabel, toggleDash, toggleGridSnap } from "../actions";
 import { store, useStore } from "../store";
 import { Canvas } from "./Canvas";
@@ -59,6 +60,8 @@ function onKeyDown(e: KeyboardEvent) {
   if (mod) {
     const handled = () => e.preventDefault();
     if (k === "z" && e.shiftKey) return handled(), store.redo();
+    // While drawing a polyline/curve, undo takes back the last click.
+    if (k === "z" && hasDraft() && (s.tool === "polyline" || s.tool === "curve")) return handled(), removeLastDraftPoint();
     if (k === "z") return handled(), store.undo();
     if (k === "y") return handled(), store.redo();
     if (k === "s") return handled(), save(e.shiftKey);
@@ -94,6 +97,7 @@ function onKeyDown(e: KeyboardEvent) {
   if (e.key === "Enter") {
     if (s.tool === "polyline" && hasDraft()) return finishPolyline(false);
     if (s.tool === "curve" && hasDraft()) return finishCurve(false);
+    if (insertAtHint()) return e.preventDefault();
     const sel = store.selected();
     if (sel.length === 1 && sel[0].type === "label") {
       e.preventDefault();
@@ -102,14 +106,18 @@ function onKeyDown(e: KeyboardEvent) {
     return;
   }
   if (e.key === "Backspace" || e.key === "Delete") {
-    if ((s.tool === "polyline" || s.tool === "curve") && hasDraft()) return removeLastDraftPoint();
+    // Delete while drawing: the whole thing goes.
+    if ((s.tool === "polyline" || s.tool === "curve") && hasDraft()) return cancelDraft();
     if (deleteActiveNode()) return;
     return deleteSelection();
   }
   if (e.key.startsWith("Arrow")) {
     e.preventDefault();
-    // ⇧ ×4, ⌥ fine (a fifth of a grid step)
-    const step = s.settings.gridSize * (e.shiftKey ? 4 : 1) * (e.altKey ? 0.2 : 1);
+    // One step is about 15 px on screen (in grid steps, halved or doubled),
+    // so zooming in gives finer moves. ⇧ ×4, ⌥ a fifth.
+    const g = s.settings.gridSize;
+    const base = g * Math.pow(2, Math.round(Math.log2(15 / (g * s.view.zoom))));
+    const step = Math.min(g, base) * (e.shiftKey ? 4 : 1) * (e.altKey ? 0.2 : 1);
     const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key]!;
     return nudge(d[0], d[1]);
   }
@@ -165,6 +173,7 @@ export function App() {
       void loadSnippets(store.get().settings.snippetFile || DEFAULT_SNIPPET_FILE);
       const f = await call<string | null>("startupFile");
       if (f) await openPath(f);
+      (window as any).__ready = true; // for the UI tests: settings are loaded
     })();
     (window.tikzApi as any)?.onOpenFile?.((p: string) => openFromOutside(p));
     const beforeUnload = (e: BeforeUnloadEvent) => {
@@ -203,6 +212,7 @@ export function App() {
       <SettingsDialog />
       <CommandPalette />
       <Prompt />
+      <ContextMenu />
     </div>
   );
 }

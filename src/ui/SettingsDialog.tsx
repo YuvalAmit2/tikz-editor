@@ -50,6 +50,14 @@ function Dialog({ initial }: { initial: Settings }) {
         <h4>Tools</h4>
         {bool("returnToSelect", "Return to the Select tool after placing an object")}
 
+        {bool("showKeys", "Show keyboard shortcuts on buttons")}
+        {s.showKeys && (
+          <div className="sub-rows">
+            {bool("showToolbarKeys", "In the toolbar")}
+            {bool("showStyleKeys", "In the style panel")}
+          </div>
+        )}
+
         <h4>Grid and snapping</h4>
         <label className="row">
           <span>Grid spacing (cm)</span>
