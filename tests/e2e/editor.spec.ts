@@ -117,7 +117,7 @@ test("labels: math by default, text with $, errors shown", async ({ page }) => {
   await page.keyboard.type("\\undefinedmacro x");
   await expect(page.getByTestId("label-error")).toContainText("Undefined control sequence", { timeout: 20_000 });
   // Emptying a label deletes it
-  await page.keyboard.press("Control+a");
+  await page.keyboard.press("ControlOrMeta+a"); // Ctrl+A is "line start" on macOS
   await page.keyboard.press("Backspace");
   await page.keyboard.press("Enter");
   expect(await scene(page)).toHaveLength(2);
