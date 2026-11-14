@@ -39,18 +39,25 @@ function register() {
   monaco.languages.registerCompletionItemProvider("latex", {
     provideCompletionItems(model, position) {
       const word = model.getWordUntilPosition(position);
-      // Prefixes are all caps: only offer snippets for an uppercase word.
-      if (!word.word || !/^[A-Z]/.test(word.word)) return { suggestions: [] };
+      // Any case matches (as in VS Code), but not a command name after a
+      // backslash, and a lowercase word needs two letters so a one-letter
+      // label finished with Enter isn't turned into a snippet.
+      const w = word.word;
+      if (!w || !/^[A-Za-z]/.test(w)) return { suggestions: [] };
+      if (/[a-z]/.test(w[0]) && w.length < 2) return { suggestions: [] };
+      const before = model.getLineContent(position.lineNumber).charAt(word.startColumn - 2);
+      if (before === "\\") return { suggestions: [] };
+      const lw = w.toLowerCase();
       const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn);
       const suggestions = snippets
-        .filter((s) => s.prefix.startsWith(word.word))
+        .filter((s) => s.prefix.toLowerCase().startsWith(lw))
         .map((s) => ({
           label: { label: s.prefix, description: s.description },
           kind: monaco.languages.CompletionItemKind.Snippet,
           insertText: s.body,
           insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
           range,
-          sortText: s.prefix === word.word ? "0" : "1" + s.prefix,
+          sortText: s.prefix.toLowerCase() === lw ? "0" : "1" + s.prefix,
         }));
       return { suggestions };
     },

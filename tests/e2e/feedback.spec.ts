@@ -217,4 +217,25 @@ test("snippets: Enter accepts the suggestion, the next Enter finishes the label"
   await page.keyboard.press("Enter");
   expect((await st(page)).editingLabel).toBeNull();
   expect((await objs(page))[0].text).toBe("\\frac{1}{2}");
+  // Lowercase works too, but not after a backslash or for a single letter.
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("t");
+  await page.mouse.click(...(await at(page, 0, -2)));
+  await page.keyboard.type("fra");
+  await expect(page.locator(".suggest-widget")).toContainText("FRAC");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("a");
+  await page.keyboard.press("Tab");
+  await page.keyboard.type("b");
+  await page.keyboard.press("Enter");
+  expect((await objs(page))[1].text).toBe("\\frac{a}{b}");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("t");
+  await page.mouse.click(...(await at(page, 0, 2)));
+  await page.keyboard.type("$\\frac");
+  await page.waitForTimeout(300);
+  await expect(page.locator(".suggest-widget.visible")).toHaveCount(0);
+  await page.keyboard.type("{x}{y}$");
+  await page.keyboard.press("Enter");
+  expect((await objs(page))[2].text).toBe("$\\frac{x}{y}$");
 });
