@@ -159,6 +159,9 @@ export interface LabelObj extends Base {
   follow?: { ids: string[]; ref: Vec; avoid: boolean; off?: boolean };
   /** A white box behind the text (so it can sit on a line). */
   bg?: boolean;
+  /** Made by clicking with the Text tool: the text itself (not TikZ's box
+   *  around it) is kept centred on this point, through any edits. */
+  inkAt?: Vec;
 }
 
 /** An anchor of a smooth curve (see model/curve.ts). */

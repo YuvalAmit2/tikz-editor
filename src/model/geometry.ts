@@ -135,7 +135,7 @@ function transformOne(o: Obj, m: Affine): Obj {
     case "point":
       return { ...o, p: applyAffine(m, o.p) };
     case "label":
-      return { ...o, p: applyAffine(m, o.p), ...(o.follow ? { follow: { ...o.follow, ref: applyAffine(m, o.follow.ref) } } : {}) };
+      return { ...o, p: applyAffine(m, o.p), ...(o.follow ? { follow: { ...o.follow, ref: applyAffine(m, o.follow.ref) } } : {}), ...(o.inkAt ? { inkAt: applyAffine(m, o.inkAt) } : {}) };
     case "curve":
       return transformCurve(o, m);
   }

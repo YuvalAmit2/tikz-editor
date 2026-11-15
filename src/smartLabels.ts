@@ -9,6 +9,14 @@ function update() {
   const s = store.get();
   const done: LabelObj[] = [];
   for (const o of s.scene.objects) {
+    // Text tool labels: the text centred on where it was clicked.
+    if (o.type === "label" && o.inkAt && !o.attach) {
+      const e = getLabel(o);
+      if (e?.status !== "ok") continue;
+      const p = nodePointForInk(o, o.inkAt, o.anchor);
+      if (Math.hypot(p.x - o.p.x, p.y - o.p.y) > 1e-9) done.push({ ...o, p });
+      continue;
+    }
     if (o.type !== "label" || !o.attach || s.editingLabel === o.id) continue;
     const e = getLabel(o);
     if (!e || e.status === "pending") continue;
@@ -53,6 +61,12 @@ export function followLabels(scene: Scene, prev: Scene | null, final: boolean): 
   let changed: LabelObj[] | null = null;
   const before = new Map((prev?.objects ?? []).map((o) => [o.id, o]));
   for (const o of scene.objects) {
+    // Text tool labels stay centred on their point (e.g. after the anchor changed).
+    if (o.type === "label" && o.inkAt && !o.attach && getLabel(o)?.status === "ok") {
+      const p = nodePointForInk(o, o.inkAt, o.anchor);
+      if (Math.hypot(p.x - o.p.x, p.y - o.p.y) > 1e-9) (changed ??= []).push({ ...o, p });
+      continue;
+    }
     if (o.type !== "label" || !o.follow || o.follow.off) continue;
     const targets = scene.objects.filter((x) => o.follow!.ids.includes(x.id));
     const ref = followRef(targets);

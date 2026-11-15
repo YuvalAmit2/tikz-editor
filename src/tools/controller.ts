@@ -597,7 +597,8 @@ export function onPointerDown(e: PEvent) {
         store.set({ selection: [hit.id], editingLabel: hit.id, tool: s.settings.returnToSelect ? "select" : s.tool });
         return;
       }
-      const o: Obj = { id: newId(), type: "label", style: { ...s.style, fill: null }, p: sp, text: "", textMode: false, anchor: "center", font: "" };
+      // Its text is centred on the point clicked (once it's compiled).
+      const o: Obj = { id: newId(), type: "label", style: { ...s.style, fill: null }, p: sp, text: "", textMode: false, anchor: "center", font: "", inkAt: sp };
       finishCreate(o);
       return;
     }

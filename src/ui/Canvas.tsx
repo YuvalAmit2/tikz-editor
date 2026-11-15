@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { zoomAt } from "../actions";
+import { zoomAt, zoomToFit } from "../actions";
 import { getLabel, labelBox, labelImage, labelNodeBox, labelStore } from "../labels/render";
-import { ptToCm, sub, len, type Box } from "../model/geometry";
+import { geomBox, ptToCm, sub, len, unionBox, type Box } from "../model/geometry";
 import type { Obj, Style, Vec } from "../model/types";
 import { patternLook, xcolorCss } from "../model/xcolor";
 import { marksOf } from "../model/marks";
@@ -130,8 +130,37 @@ export function Canvas() {
         {showSnap && s.snap && <SnapMark p={toScreen(s.snap.p)} kind={s.snap.kind} />}
         {s.insertHint && editTargets().length > 0 && <InsertHint p={toScreen(s.insertHint)} />}
       </svg>
+      <BackToDrawing size={size} />
       <StatusBar />
     </div>
+  );
+}
+
+/** When the drawing is out of sight (scrolled or zoomed away), a button
+ *  that brings it back into view (the same as ⇧1). */
+function BackToDrawing({ size }: { size: { w: number; h: number } }) {
+  const objects = useStore((s) => s.scene.objects);
+  const view = useStore((s) => s.view);
+  let b: Box | null = null;
+  for (const o of objects) b = unionBox(b, o.type === "label" ? labelBox(o) : geomBox(o));
+  if (!b) return null;
+  const z = view.zoom;
+  const vw = size.w / z;
+  const vh = size.h / z;
+  const v = { minX: view.cx - vw / 2, maxX: view.cx + vw / 2, minY: view.cy - vh / 2, maxY: view.cy + vh / 2 };
+  // Out of sight: less than half of it on screen, or too small to see.
+  const ix = Math.max(0, Math.min(b.maxX, v.maxX) - Math.max(b.minX, v.minX));
+  const iy = Math.max(0, Math.min(b.maxY, v.maxY) - Math.max(b.minY, v.minY));
+  const w = Math.max(b.maxX - b.minX, 1e-6);
+  const h = Math.max(b.maxY - b.minY, 1e-6);
+  const shown = (b.maxX - b.minX < 1e-6 ? (ix > 0 || (b.minX >= v.minX && b.minX <= v.maxX) ? 1 : 0) : ix / w) * (b.maxY - b.minY < 1e-6 ? (iy > 0 || (b.minY >= v.minY && b.minY <= v.maxY) ? 1 : 0) : iy / h);
+  const tiny = Math.max(w, h) * z < 24;
+  if (shown >= 0.5 && !tiny) return null;
+  return (
+    <button className="back-to-drawing" title="Show the whole drawing (⇧1)" data-testid="back-to-drawing" onClick={() => zoomToFit(size)}>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"><circle cx="8" cy="8" r="4.5" /><path d="M8 1v3M8 12v3M1 8h3M12 8h3" /><circle cx="8" cy="8" r="1.2" fill="currentColor" stroke="none" /></svg>
+      Back to the drawing
+    </button>
   );
 }
 
