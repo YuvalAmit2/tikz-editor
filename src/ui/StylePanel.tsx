@@ -224,8 +224,9 @@ export function StylePanel() {
               ]}
             />
             {hasLine && !pieceMode && !onlyLabels && !onlyPoints && (
-              <Seg
-                value={st.wave ?? ""}
+              <>
+                <Seg
+                  value={st.wave ?? ""}
                 onPick={(w) => applyStyle({ wave: (w || undefined) as Style["wave"] })}
                 testid="wave"
                 options={[
@@ -236,6 +237,11 @@ export function StylePanel() {
                   { v: "brace", label: <svg width="26" height="10" viewBox="0 0 34 10"><path d="M3 9q0-3 3-3h8q3 0 3-4q0 4 3 4h8q3 0 3 3" fill="none" stroke="currentColor" strokeWidth="1.2" /></svg>, title: "Curly brace, from the first point to the last, on the left going along the line (flip it for the other side)" },
                 ]}
               />
+                <label className="check-row" title="Drawn over a wider white line, so lines below it are broken where it crosses them (knots, braids, a curve passing in front). ⌘] brings it to the front.">
+                  <input type="checkbox" checked={!!st.gap} onChange={(e) => applyStyle({ gap: e.target.checked || undefined })} data-testid="gap-toggle" />
+                  <span>Gap where it crosses lines below</span>
+                </label>
+              </>
             )}
           </section>
         </>
@@ -288,7 +294,7 @@ export function StylePanel() {
 
       {hasLine && !onlyLabels && !onlyPoints && !pieceMode && (
         <section>
-          <h4>Arrows in the middle, crossings</h4>
+          <h4>Arrows in the middle</h4>
           <Seg
             value={st.mid ?? 0}
             onPick={(mid) => applyStyle({ mid: mid || undefined })}
@@ -301,10 +307,6 @@ export function StylePanel() {
             ]}
             testid="mid"
           />
-          <label className="check-row" title="Drawn over a wider white line, so lines below it are broken where it crosses them (knots, braids, a curve passing in front). ⌘] brings it to the front.">
-            <input type="checkbox" checked={!!st.gap} onChange={(e) => applyStyle({ gap: e.target.checked || undefined })} data-testid="gap-toggle" />
-            <span>Gap where it crosses lines below</span>
-          </label>
         </section>
       )}
 
