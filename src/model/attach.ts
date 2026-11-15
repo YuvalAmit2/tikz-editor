@@ -18,7 +18,7 @@ export function withAttached(orig: Obj[], moved: Obj[], scene: Obj[]): Obj[] {
   const to = (p: Vec): Vec | null => shifts.find(([a]) => same(a, p))?.[1] ?? null;
   const extra: Obj[] = [];
   for (const o of scene) {
-    if (ids.has(o.id) || o.hidden) continue;
+    if (ids.has(o.id)) continue;
     if (o.type === "path") {
       let changed = false;
       const pts = o.pts.map((p) => {
