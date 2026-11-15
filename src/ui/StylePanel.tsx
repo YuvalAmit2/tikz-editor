@@ -175,7 +175,7 @@ export function StylePanel() {
   const types = new Set(objs.map((o) => o.type));
   const onlyLabels = objs.length > 0 && [...types].every((t) => t === "label");
   const onlyPoints = objs.length > 0 && [...types].every((t) => t === "point");
-  const hasLine = objs.length === 0 || objs.some((o) => o.type === "path" || o.type === "curve" || o.type === "ellipse");
+  const hasLine = objs.length === 0 || objs.some((o) => (o.type === "path" || o.type === "curve" || o.type === "ellipse") && o.style.stroke);
   const hasOpen = objs.length === 0 || objs.some((o) => (o.type === "path" || o.type === "curve") && !o.closed);
   const hasFillable = objs.length === 0 || objs.some((o) => ((o.type === "path" || o.type === "curve") && (o.closed || !!o.style.fill)) || o.type === "ellipse");
   const labels = objs.filter((o): o is Extract<Obj, { type: "label" }> => o.type === "label");
@@ -268,7 +268,7 @@ export function StylePanel() {
 
       {hasLine && !onlyLabels && !onlyPoints && !pieceMode && (
         <section>
-          <h4>Arrows in the middle</h4>
+          <h4>Arrows in the middle, crossings</h4>
           <Seg
             value={st.mid ?? 0}
             onPick={(mid) => applyStyle({ mid: mid || undefined })}
@@ -281,6 +281,10 @@ export function StylePanel() {
             ]}
             testid="mid"
           />
+          <label className="check-row" title="Drawn over a wider white line, so lines below it are broken where it crosses them (knots, braids, a curve passing in front). ⌘] brings it to the front.">
+            <input type="checkbox" checked={!!st.gap} onChange={(e) => applyStyle({ gap: e.target.checked || undefined })} data-testid="gap-toggle" />
+            <span>Gap where it crosses lines below</span>
+          </label>
         </section>
       )}
 

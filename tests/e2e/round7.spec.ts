@@ -77,3 +77,12 @@ test("⇧T labels the edge of a shape that was clicked", async ({ page }) => {
   expect(box.maxX).toBeGreaterThan(-2.3);
   expect((box.minY + box.maxY) / 2).toBeCloseTo(0, 1);
 });
+
+test("a line with a gap breaks the lines below it", async ({ page }) => {
+  await setup(page);
+  await commit(page, [{ id: "a", type: "path", pts: [{ x: -1, y: 0 }, { x: 1, y: 0 }], closed: false }, { id: "b", type: "path", pts: [{ x: 0, y: -1 }, { x: 0, y: 1 }], closed: false }], ["b"]);
+  await page.getByTestId("gap-toggle").check();
+  expect((await objs(page))[1].style.gap).toBe(true);
+  // A white line under b.
+  await expect(page.locator('svg.canvas g[data-id="b"] path[stroke="rgb(255,255,255)"]')).toHaveCount(1);
+});

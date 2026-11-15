@@ -11,7 +11,7 @@ import { curveSegments } from "../model/curve";
 import { styledRuns } from "../model/parts";
 import type { Obj, Pattern, Scene, Style } from "../model/types";
 import { patternLook } from "../model/xcolor";
-import { marksTikz } from "../model/marks";
+import { halo, marksTikz } from "../model/marks";
 
 export const SCENE_MARKER = "%tikz-editor-scene ";
 
@@ -90,6 +90,8 @@ function objToTikz(o: Obj, others: Obj[] = []): string | null {
     return [line, text].filter(Boolean).join("\n") || null;
   }
   if (o.hidden) return null;
+  const h = halo(o);
+  if (h) return [plainToTikz(h), objToTikz({ ...o, style: { ...o.style, gap: undefined } } as Obj, others)].filter(Boolean).join("\n") || null;
   if (o.parts?.length && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) {
     const t = partedToTikz(o, others);
     if (t !== null) return t;

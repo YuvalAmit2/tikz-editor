@@ -22,6 +22,9 @@ export interface Style {
   /** Arrowheads in the middle of each straight edge (or halfway along a
    *  curve or ellipse): 1 or 2 of them, negative pointing backwards. */
   mid?: number;
+  /** Breaks the lines it crosses that are below it (knots, braids, surfaces):
+   *  drawn over a wider white line. */
+  gap?: boolean;
 }
 
 export type Pattern = "north east lines" | "north west lines" | "horizontal lines" | "vertical lines" | "crosshatch" | "dots";

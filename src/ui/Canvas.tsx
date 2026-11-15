@@ -4,7 +4,7 @@ import { getLabel, labelBox, labelImage, labelNodeBox, labelStore } from "../lab
 import { ptToCm, sub, len, type Box } from "../model/geometry";
 import type { Obj, Style, Vec } from "../model/types";
 import { patternLook, xcolorCss } from "../model/xcolor";
-import { marksOf } from "../model/marks";
+import { halo, marksOf } from "../model/marks";
 import { curvePathD, curveSegments } from "../model/curve";
 import { componentPieces, piecesSvgD, styledRuns } from "../model/parts";
 import {
@@ -268,6 +268,14 @@ function ObjView({ o, z }: { o: Obj; z: number }) {
 }
 
 function VisibleObjView({ o, z }: { o: Obj; z: number }) {
+  const h = halo(o);
+  if (h)
+    return (
+      <g data-id={o.id}>
+        <PlainObjView o={h} z={z} />
+        <VisibleObjView o={{ ...o, style: { ...o.style, gap: undefined } } as Obj} z={z} />
+      </g>
+    );
   if (o.parts?.length && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) return <PartedView o={o} z={z} />;
   return <PlainObjView o={o} z={z} />;
 }

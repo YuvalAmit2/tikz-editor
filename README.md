@@ -94,6 +94,8 @@ In the text panel: labels are **math by default** (`\cO_K`), but a label contain
 
 **Arrows in the middle** (style panel): one or two arrowheads in the middle of each straight edge, or halfway along a curve or ellipse, for identification diagrams (a torus as a square with marked edges) and contours. Uses TikZ's `decorations.markings`, which `tikzfig.sty` loads.
 
+**Crossings** (knots, braids, a curve passing in front of a surface): tick "Gap where it crosses lines below" on the line that goes over; it's drawn over a wider white line, so the lines below it are broken where it crosses them. It must be in front (⌘]).
+
 **Hatched fills:** pick a pattern under Fill; the strength buttons (15%–100%) then set how dense the hatching is, not how pale (100% is TikZ's own pattern; lighter ones use `patterns.meta`, which `tikzfig.sty` loads).
 
 **Colours:** the rainbow swatch opens a colour picker (hex too); colours you make are kept as swatches (right-click one to remove it). They're written as `{rgb,255:red,…}`, which needs no extra package.

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { marksOf, marksTikz } from "../../src/model/marks";
 import { freshCopies } from "../../src/model/copies";
 import { translation } from "../../src/model/geometry";
-import { fmt, sceneToPicture } from "../../src/tikz/export";
+import { fmt, sceneToPicture, sceneToTikz } from "../../src/tikz/export";
 import { DEFAULT_STYLE, type Obj } from "../../src/model/types";
 
 const line = (mid: number, closed = false): Obj => ({
@@ -52,5 +52,15 @@ describe("copies", () => {
     // A label copied without its object is a plain label.
     const [alone] = freshCopies([l], translation(1, 0));
     expect(alone.type === "label" && alone.follow).toBeUndefined();
+  });
+});
+
+describe("gap where it crosses", () => {
+  it("draws a wider white line first", () => {
+    const o: Obj = { ...line(0), style: { ...DEFAULT_STYLE, gap: true } };
+    const t = sceneToTikz({ version: 1, objects: [o] });
+    const white = t.indexOf("\\path[draw=white,line width=4.4pt] (0,0) -- (2,0) -- (2,2);");
+    expect(white).toBeGreaterThan(0);
+    expect(t.indexOf("\\path[draw] (0,0) -- (2,0) -- (2,2);")).toBeGreaterThan(white);
   });
 });

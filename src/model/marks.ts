@@ -86,3 +86,15 @@ export function marksTikz(o: Obj, fmt: (n: number) => string): string | null {
   if (!marks.length) return null;
   return `postaction={decorate,decoration={markings,${marks.join(",")}}}`;
 }
+
+/** The white line under an object with style.gap (wider by 2pt each side),
+ *  or null. */
+export function halo(o: Obj): Obj | null {
+  if (!o.style.gap || !o.style.stroke || (o.type !== "path" && o.type !== "curve" && o.type !== "ellipse")) return null;
+  return {
+    ...o,
+    parts: undefined,
+    text: undefined,
+    style: { stroke: "white", width: o.style.width + 4, dash: "solid", fill: null, arrowStart: false, arrowEnd: false },
+  } as Obj;
+}
