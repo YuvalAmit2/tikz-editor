@@ -3,11 +3,12 @@ import { describe, expect, it } from "vitest";
 import { marksOf, marksTikz } from "../../src/model/marks";
 import { freshCopies, nextNumbered } from "../../src/model/copies";
 import { withAttached } from "../../src/model/attach";
+import { waved } from "../../src/model/wave";
 import { graphPieces, parseExpr } from "../../src/model/expr";
 import { sampleCurve } from "../../src/model/curve";
 import { parsePlot } from "../../src/insert";
 import { translation } from "../../src/model/geometry";
-import { fmt, sceneToPicture, sceneToTikz } from "../../src/tikz/export";
+import { fmt, sceneToTikz } from "../../src/tikz/export";
 import { DEFAULT_STYLE, type Obj } from "../../src/model/types";
 
 const line = (mid: number, closed = false): Obj => ({
@@ -28,9 +29,9 @@ describe("arrows in the middle", () => {
     expect(marksOf(line(0))).toHaveLength(0);
   });
 
-  it("TikZ marks at the edges' middles, as fractions of the length", () => {
-    expect(marksTikz(line(1), fmt)).toBe("postaction={decorate,decoration={markings,mark=at position 0.25 with {\\arrow{>}},mark=at position 0.75 with {\\arrow{>}}}}");
-    expect(marksTikz(line(-2), fmt)).toContain("\\arrow{<<}");
+  it("TikZ: a short arrow ending at each mark", () => {
+    expect(marksTikz(line(1), fmt)).toBe("\\path[draw,->] (0.95,0) -- (1,0);\n\\path[draw,->] (2,0.95) -- (2,1);");
+    expect(marksTikz(line(-2), fmt)).toContain("\\path[draw,->>] (1.05,0) -- (1,0);");
   });
 
   it("an ellipse's mark is where TikZ's ellipse is halfway round", () => {
@@ -40,8 +41,9 @@ describe("arrows in the middle", () => {
     expect(m.dir.y).toBeCloseTo(-1);
   });
 
-  it("a pasted picture names the library it needs", () => {
-    expect(sceneToPicture({ version: 1, objects: [line(1)] })).toContain("decorations.markings");
+  it("compiles in a scaled-down figure with small circles (decorations didn't)", () => {
+    const c: Obj = { id: "c", type: "ellipse", style: { ...DEFAULT_STYLE, mid: 1 }, c: { x: 0, y: 0 }, rx: 0.2, ry: 0.2, rot: 0 };
+    expect(sceneToTikz({ version: 1, objects: [c] })).not.toContain("decorat");
   });
 });
 
@@ -131,5 +133,27 @@ describe("plotting a function", () => {
     expect(parsePlot("y = x^2, -1, 2", { cx: 0, w: 10 })).toMatchObject({ a: -1, b: 2 });
     expect(parsePlot("x^2", { cx: 0, w: 10 })).toMatchObject({ a: -3.5, b: 3.5 });
     expect(parsePlot("sin(x), -pi, pi", { cx: 0, w: 10 }).b).toBeCloseTo(Math.PI);
+  });
+});
+
+describe("wavy, zigzag and coiled lines", () => {
+  it("keep their ends, and are written as coordinates", () => {
+    for (const wave of ["snake", "zigzag", "coil"] as const) {
+      const o: Obj = { id: "w", type: "path", style: { ...DEFAULT_STYLE, wave }, pts: [{ x: 0, y: 0 }, { x: 3, y: 0 }], closed: false };
+      const w = waved(o)!;
+      expect(w.pts[0].x).toBeCloseTo(0, 9);
+      expect(w.pts[0].y).toBeCloseTo(0, 9);
+      expect(w.pts[w.pts.length - 1].x).toBeCloseTo(3, 9);
+      expect(w.pts[w.pts.length - 1].y).toBeCloseTo(0, 9);
+      expect(Math.max(...w.pts.map((p) => Math.abs(p.y)))).toBeGreaterThan(0.05);
+      const t = sceneToTikz({ version: 1, objects: [o] });
+      expect(t).not.toContain("decorat");
+      expect(t.split(" -- ").length).toBeGreaterThan(20);
+    }
+  });
+  it("end straight under an arrowhead", () => {
+    const o: Obj = { id: "w", type: "path", style: { ...DEFAULT_STYLE, wave: "snake", arrowEnd: true }, pts: [{ x: 0, y: 0 }, { x: 3, y: 0 }], closed: false };
+    const p = waved(o)!.pts;
+    expect(p[p.length - 2].y).toBeCloseTo(0, 9);
   });
 });

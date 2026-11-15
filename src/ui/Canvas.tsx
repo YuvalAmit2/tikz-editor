@@ -5,6 +5,7 @@ import { ptToCm, sub, len, type Box } from "../model/geometry";
 import type { Obj, Style, Vec } from "../model/types";
 import { patternLook, xcolorCss } from "../model/xcolor";
 import { halo, marksOf } from "../model/marks";
+import { waved } from "../model/wave";
 import { curvePathD, curveSegments } from "../model/curve";
 import { componentPieces, piecesSvgD, styledRuns } from "../model/parts";
 import {
@@ -277,6 +278,14 @@ function VisibleObjView({ o, z }: { o: Obj; z: number }) {
       </g>
     );
   if (o.parts?.length && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) return <PartedView o={o} z={z} />;
+  const w = waved(o);
+  if (w)
+    return (
+      <g data-id={o.id}>
+        <PlainObjView o={{ ...w, style: { ...w.style, mid: undefined } }} z={z} />
+        <MidMarks o={o} st={o.style} z={z} />
+      </g>
+    );
   return <PlainObjView o={o} z={z} />;
 }
 

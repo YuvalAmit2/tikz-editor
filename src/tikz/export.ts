@@ -12,6 +12,7 @@ import { styledRuns } from "../model/parts";
 import type { Obj, Pattern, Scene, Style } from "../model/types";
 import { patternLook } from "../model/xcolor";
 import { halo, marksTikz } from "../model/marks";
+import { waved } from "../model/wave";
 
 export const SCENE_MARKER = "%tikz-editor-scene ";
 
@@ -73,14 +74,10 @@ function partedToTikz(o: Obj, others: Obj[]): string | null {
     lines.push(`\\path[${opts.join(",")}] ${body};`);
   }
   const marks = marksTikz(o, fmt);
-  if (marks) {
-    // The arrows in the middle, on an undrawn copy of the whole line.
-    const whole = plainToTikz({ ...o, parts: undefined, style: { ...o.style, fill: null, dash: "solid", arrowStart: false, arrowEnd: false } } as Obj);
-    const m = whole?.match(/^\\path\[(.*?)\] (.*)$/s);
-    if (m) lines.push(`\\path[${m[1].replace(/^draw(=[^,]*)?/, (d) => "color=" + (d === "draw" ? "black" : d.slice(5)))}] ${m[2]}`);
-  }
+  if (marks) lines.push(marks);
   return lines.join("\n") || null;
 }
+
 
 function objToTikz(o: Obj, others: Obj[] = []): string | null {
   if (o.type === "curve" && o.text) {
@@ -96,7 +93,13 @@ function objToTikz(o: Obj, others: Obj[] = []): string | null {
     const t = partedToTikz(o, others);
     if (t !== null) return t;
   }
-  return plainToTikz(o);
+  const w = waved(o);
+  if (w) {
+    // The wave as coordinates; arrows in the middle on the line it follows.
+    const line = plainToTikz({ ...w, style: { ...w.style, mid: undefined } });
+    return [line, marksTikz(o, fmt)].filter(Boolean).join("\n") || null;
+  }
+  return [plainToTikz(o), marksTikz(o, fmt)].filter(Boolean).join("\n") || null;
 }
 
 function curveTextTikz(o: Extract<Obj, { type: "curve" }>): string | null {
@@ -111,17 +114,11 @@ function curveTextTikz(o: Extract<Obj, { type: "curve" }>): string | null {
   }
 }
 
-/** Style options plus the arrows in the middle (see model/marks.ts). */
-function withMarks(o: Obj, opts: string[]): string[] {
-  const m = marksTikz(o, fmt);
-  return m && opts.length ? [...opts, m] : opts;
-}
-
 function plainToTikz(o: Obj): string | null {
   switch (o.type) {
     case "path": {
       if (o.pts.length < 2) return null;
-      const opts = withMarks(o, styleOpts(o.style, { arrows: !o.closed }));
+      const opts = styleOpts(o.style, { arrows: !o.closed });
       if (opts.length === 0) return null;
       const body = o.pts.map(coord).join(" -- ") + (o.closed ? " -- cycle" : "");
       return `\\path[${opts.join(",")}] ${body};`;
@@ -130,7 +127,7 @@ function plainToTikz(o: Obj): string | null {
       const segs = curveSegments(o);
       if (segs.length === 0) return null;
       const closed = o.closed && o.nodes.length >= 3;
-      const opts = withMarks(o, styleOpts(o.style, { arrows: !closed }));
+      const opts = styleOpts(o.style, { arrows: !closed });
       if (opts.length === 0) return null;
       let body = coord(segs[0].a);
       segs.forEach((s, i) => {
@@ -140,7 +137,7 @@ function plainToTikz(o: Obj): string | null {
       return `\\path[${opts.join(",")}] ${body};`;
     }
     case "ellipse": {
-      const opts = withMarks(o, styleOpts(o.style, { arrows: false }));
+      const opts = styleOpts(o.style, { arrows: false });
       if (opts.length === 0) return null;
       if (Math.abs(o.rot) > 1e-9 && Math.abs(o.rx - o.ry) > 1e-9) opts.push(`rotate around={${fmt(o.rot)}:${coord(o.c)}}`);
       return `\\path[${opts.join(",")}] ${coord(o.c)} ellipse [x radius=${fmt(o.rx)}, y radius=${fmt(o.ry)}];`;
@@ -184,7 +181,7 @@ export function sceneToPicture(scene: Scene): string {
   const m = box ? translation(-Math.round(((box.minX + box.maxX) / 2) * 4) / 4, -Math.round(((box.minY + box.maxY) / 2) * 4) / 4) : null;
   const objs = m ? scene.objects.map((o) => transformObj(o, m)) : scene.objects;
   const lines: string[] = [];
-  const libs = [objs.some((o) => o.type === "curve" && o.text) && "decorations.text", objs.some((o) => o.style.pattern && o.style.fill && !o.hidden) && "patterns", objs.some((o) => o.style.pattern && o.style.fill && !o.hidden && patternLook(o.style.fill).gap !== 3) && "patterns.meta", objs.some((o) => o.style.mid && o.style.stroke && !o.hidden && o.type !== "label" && o.type !== "point") && "decorations.markings"].filter(Boolean);
+  const libs = [objs.some((o) => o.type === "curve" && o.text) && "decorations.text", objs.some((o) => o.style.pattern && o.style.fill && !o.hidden) && "patterns", objs.some((o) => o.style.pattern && o.style.fill && !o.hidden && patternLook(o.style.fill).gap !== 3) && "patterns.meta"].filter(Boolean);
   if (libs.length) lines.push(`% needs \\usetikzlibrary{${libs.join(",")}}`);
   lines.push("\\begin{tikzpicture}");
   for (const o of objs) {

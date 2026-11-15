@@ -1,9 +1,10 @@
 // Arrows in the middle of a line (style.mid): one in the middle of every
 // straight edge of a line/polygon, one halfway along a curve or ellipse.
 // Used for identification diagrams (a torus as a square with marked edges),
-// contours, and the like. Exported with TikZ's decorations.markings.
+// contours, and the like.
 import { sampleCurve } from "./curve";
 import { ellipsePoint } from "./geometry";
+import { waved } from "./wave";
 import type { Obj, Vec } from "./types";
 
 export interface Mark {
@@ -18,8 +19,8 @@ const unit = (v: Vec): Vec => {
   return { x: v.x / l, y: v.y / l };
 };
 
-/** Positions along the object (fractions of its length, as TikZ counts them)
- *  and the marks there, pointing along the line (before style.mid's sign). */
+/** Positions along the object (fractions of its length) and the marks
+ *  there, pointing along the line (before style.mid's sign). */
 export function midMarks(o: Obj): { at: number; mark: Mark }[] {
   if (o.type === "path") {
     const pts = o.closed ? [...o.pts, o.pts[0]] : o.pts;
@@ -77,22 +78,29 @@ export function marksOf(o: Obj): Mark[] {
   return midMarks(o).map(({ mark }) => ({ p: mark.p, dir: { x: mark.dir.x * s, y: mark.dir.y * s } }));
 }
 
-/** TikZ option drawing the marks (decorations.markings), or null. */
+/** The arrows in the middle as TikZ: each a short stroke along the line
+ *  ending in an arrowhead at the mark (no decorations library: those fail
+ *  on small curved paths when a figure is scaled down). */
 export function marksTikz(o: Obj, fmt: (n: number) => string): string | null {
   const m = o.style.mid ?? 0;
-  if (!m || !o.style.stroke) return null;
-  const tip = (m > 0 ? ">" : "<").repeat(Math.min(2, Math.abs(m)));
-  const marks = midMarks(o).map(({ at }) => `mark=at position ${fmt(at)} with {\\arrow{${tip}}}`);
-  if (!marks.length) return null;
-  return `postaction={decorate,decoration={markings,${marks.join(",")}}}`;
+  const st = o.style;
+  if (!m || !st.stroke) return null;
+  const opts = [st.stroke === "black" ? "draw" : `draw=${st.stroke}`];
+  if (Math.abs(st.width - 0.4) > 1e-9) opts.push(`line width=${fmt(st.width)}pt`);
+  opts.push(Math.abs(m) >= 2 ? "->>" : "->");
+  const c = (p: Vec) => `(${fmt(p.x)},${fmt(p.y)})`;
+  const lines = marksOf(o).map(({ p, dir }) => `\\path[${opts.join(",")}] ${c({ x: p.x - dir.x * 0.05, y: p.y - dir.y * 0.05 })} -- ${c(p)};`);
+  return lines.length ? lines.join("\n") : null;
 }
 
 /** The white line under an object with style.gap (wider by 2pt each side),
  *  or null. */
 export function halo(o: Obj): Obj | null {
   if (!o.style.gap || !o.style.stroke || (o.type !== "path" && o.type !== "curve" && o.type !== "ellipse")) return null;
+  // Under a wave, the wave's own line.
+  const base = waved(o) ?? o;
   return {
-    ...o,
+    ...base,
     parts: undefined,
     text: undefined,
     style: { stroke: "white", width: o.style.width + 4, dash: "solid", fill: null, arrowStart: false, arrowEnd: false },

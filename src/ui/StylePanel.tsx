@@ -223,6 +223,19 @@ export function StylePanel() {
                 { v: "dotted", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="1.5 3" strokeLinecap="round" /></svg>, title: "dotted (.)", k: "." },
               ]}
             />
+            {hasLine && !pieceMode && !onlyLabels && !onlyPoints && (
+              <Seg
+                value={st.wave ?? ""}
+                onPick={(w) => applyStyle({ wave: (w || undefined) as Style["wave"] })}
+                testid="wave"
+                options={[
+                  { v: "", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" /></svg>, title: "Straight" },
+                  { v: "snake", label: <svg width="34" height="10"><path d="M2 5q2.5-5 5 0t5 0 5 0 5 0 5 0 5 0" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>, title: "Wavy (photon lines, branch cuts)" },
+                  { v: "zigzag", label: <svg width="34" height="10"><path d="M2 5l2.5-3.5 5 7 5-7 5 7 5-7 5 7 2.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>, title: "Zigzag (branch cuts, springs)" },
+                  { v: "coil", label: <svg width="34" height="10"><path d="M2 5c3-6 7-6 4 0s1 6 4 0 7-6 4 0 1 6 4 0 7-6 4 0 1 6 4 0" fill="none" stroke="currentColor" strokeWidth="1.1" /></svg>, title: "Coil (gluons, springs)" },
+                ]}
+              />
+            )}
           </section>
         </>
       )}

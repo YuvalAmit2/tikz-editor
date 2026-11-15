@@ -53,7 +53,7 @@ test("arrows in the middle: the panel sets them, the TikZ marks them", async ({ 
   // Two arrowheads drawn, besides the line itself.
   await expect(page.locator('svg.canvas g[data-id="a"] path')).toHaveCount(3);
   const tikz = await page.evaluate(async (url) => (await import(url)).sceneToTikz((window as any).__store.get().scene), "/src/tikz/export.ts");
-  expect(tikz).toContain("mark=at position 0.5 with {\\arrow{>>}}");
+  expect(tikz).toContain("\\path[draw,->>] (0.95,0) -- (1,0);");
   await page.getByTestId("mid-0").click();
   expect((await objs(page))[0].style.mid).toBeUndefined();
 });

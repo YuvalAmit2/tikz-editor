@@ -25,6 +25,8 @@ export interface Style {
   /** Breaks the lines it crosses that are below it (knots, braids, surfaces):
    *  drawn over a wider white line. */
   gap?: boolean;
+  /** Drawn as a wave, zigzag or coil along the line (see model/wave.ts). */
+  wave?: "snake" | "zigzag" | "coil";
 }
 
 export type Pattern = "north east lines" | "north west lines" | "horizontal lines" | "vertical lines" | "crosshatch" | "dots";
