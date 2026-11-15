@@ -57,13 +57,24 @@ export function createApi(platform: Platform) {
       .replace(/^\.+/, "")
       .slice(0, 80) + ".json";
 
+  /** The library's order: file names, first to last. */
+  const ORDER = ".order.json"; // item files never start with a dot
+  async function readOrder(dir: string): Promise<string[]> {
+    try {
+      const v = JSON.parse(await fs.readFile(path.join(dir, ORDER), "utf8"));
+      return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
   const handlers: Record<string, (p: any) => Promise<unknown>> = {
     /** All library items (each a JSON file in the library folder), newest first. */
     async listLibrary() {
       const dir = await libraryDir();
       const out: unknown[] = [];
       for (const f of await fs.readdir(dir)) {
-        if (!f.endsWith(".json")) continue;
+        if (!f.endsWith(".json") || f === ORDER) continue;
         try {
           const item = JSON.parse(await fs.readFile(path.join(dir, f), "utf8"));
           if (item && Array.isArray(item.objects)) out.push({ ...item, file: f });
@@ -71,8 +82,36 @@ export function createApi(platform: Platform) {
           // ignore broken files
         }
       }
-      out.sort((a: any, b: any) => (b.created ?? 0) - (a.created ?? 0));
+      // In the order you put them in (.order.json); new ones first, newest first.
+      const order = await readOrder(dir);
+      const rank = (f: string) => {
+        const i = order.indexOf(f);
+        return i < 0 ? -1 : i;
+      };
+      out.sort((a: any, b: any) => rank(a.file) - rank(b.file) || (b.created ?? 0) - (a.created ?? 0));
       return out;
+    },
+    /** Keep the library in this order (file names). */
+    async setLibraryOrder(p: { files: string[] }) {
+      const dir = await libraryDir();
+      await fs.writeFile(path.join(dir, ORDER), JSON.stringify(p.files.map((f) => path.basename(f)), null, 1) + "\n");
+      return true;
+    },
+    /** Give an item a new name (its file is renamed too; it keeps its place). */
+    async renameLibraryItem(p: { file: string; name: string }) {
+      const dir = await libraryDir();
+      const old = path.basename(p.file);
+      const file = itemFile(p.name);
+      if (file === ".json") throw new Error("Give the figure a name");
+      const item = JSON.parse(await fs.readFile(path.join(dir, old), "utf8"));
+      if (file !== old && (await fs.stat(path.join(dir, file)).catch(() => null))) throw new Error(`There's already one called “${p.name}”`);
+      await fs.writeFile(path.join(dir, file), JSON.stringify({ ...item, name: p.name.trim() }, null, 1) + "\n");
+      if (file !== old) {
+        await fs.rm(path.join(dir, old), { force: true });
+        const order = await readOrder(dir);
+        if (order.includes(old)) await fs.writeFile(path.join(dir, ORDER), JSON.stringify(order.map((f) => (f === old ? file : f)), null, 1) + "\n");
+      }
+      return file;
     },
     async saveLibraryItem(p: { item: { name: string } }) {
       const dir = await libraryDir();

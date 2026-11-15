@@ -881,3 +881,11 @@ button {
 /* Back to the drawing (when it's out of sight) */
 .back-to-drawing { position: absolute; right: 12px; bottom: 34px; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: 15px; background: white; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); font-size: 12.5px; color: #3b4250; cursor: pointer; }
 .back-to-drawing:hover { background: var(--accent-soft); color: var(--accent); }
+
+/* Library: number keys, reordering, right-click menu */
+.library-item .lib-key { position: absolute; top: 3px; left: 4px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 4px; background: rgba(255, 255, 255, 0.9); border: 1px solid var(--line); font-size: 9.5px; line-height: 12px; text-align: center; color: #8a909c; }
+.library-item.drop-before { box-shadow: -5px 0 0 -2px var(--accent); }
+.library-item.drop-after { box-shadow: 5px 0 0 -2px var(--accent); }
+.library-item.dragging { opacity: 0.4; }
+.library-hint { margin: 0 0 8px; }
+.context-menu .menu-title { font-size: 11px; font-weight: 600; color: var(--muted, #888); padding: 4px 10px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }

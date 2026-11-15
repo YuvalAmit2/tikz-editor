@@ -72,18 +72,41 @@ export async function saveSelectionToLibrary() {
   await reloadLibrary();
 }
 
+export async function renameLibraryItem(item: LibraryItem) {
+  if (!item.file) return;
+  const name = await askText("Rename", { initial: item.name, ok: "Rename" });
+  if (!name || name.trim() === item.name) return;
+  try {
+    await call("renameLibraryItem", { file: item.file, name });
+  } catch (e) {
+    store.flash(`Couldn't rename: ${(e as Error).message}`);
+  }
+  await reloadLibrary();
+}
+
+/** Move an item to position `to` (drag and drop in the panel). */
+export async function moveLibraryItem(item: LibraryItem, to: number) {
+  const list = items.filter((i) => i !== item);
+  list.splice(Math.max(0, Math.min(to, list.length)), 0, item);
+  items = list;
+  changed();
+  await call("setLibraryOrder", { files: list.map((i) => i.file).filter(Boolean) });
+}
+
 export async function deleteLibraryItem(item: LibraryItem) {
   if (!item.file || !window.confirm(`Delete “${item.name}” from the library?`)) return;
   await call("deleteLibraryItem", { file: item.file });
   await reloadLibrary();
 }
 
-/** Place a copy at the middle of the view (snapped to the grid), selected. */
-export function insertLibraryItem(item: LibraryItem, where?: { x: number; y: number } | null) {
+/** Place a copy at the middle of the view (snapped to the grid), selected.
+ *  `scale`: smaller or larger than it was saved (½, 2). */
+export function insertLibraryItem(item: LibraryItem, where?: { x: number; y: number } | null, scale = 1) {
   const s = store.get();
   const c = where ?? { x: s.view.cx, y: s.view.cy };
   const at = s.settings.snapToGrid ? snapGrid(c, s.settings.gridSize) : c;
-  const m = translation(at.x, at.y);
+  // Saved centred on the origin: scaled about it, then moved there.
+  const m = { a: scale, b: 0, c: 0, d: scale, e: at.x, f: at.y };
   const copies = freshCopies(item.objects, m);
   store.commit({ ...s.scene, objects: [...s.scene.objects, ...copies] }, { selection: copies.map((o) => o.id), tool: "select", pointEdit: null, editingLabel: null });
 }

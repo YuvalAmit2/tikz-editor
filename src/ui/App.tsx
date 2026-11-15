@@ -28,7 +28,8 @@ import { DEFAULT_SNIPPET_FILE, withDefaults, type Settings } from "../model/sett
 import { loadSnippets } from "./snippets";
 import { initSmartLabels } from "../smartLabels";
 import { LINE_WIDTHS } from "../model/types";
-import { cancelDraft, deleteActiveNode, finishCurve, finishPolyline, hasDraft, insertAtHint, removeLastDraftPoint, setSpaceDown, spaceWasUsed } from "../tools/controller";
+import { cancelDraft, deleteActiveNode, finishCurve, finishPolyline, hasDraft, insertAtHint, lastCanvasPoint, removeLastDraftPoint, setSpaceDown, spaceWasUsed } from "../tools/controller";
+import { insertLibraryItem, libraryStore } from "../library";
 import { ContextMenu } from "./ContextMenu";
 import { groupSelection, smartLabel, toggleDash, toggleGridSnap, toggleHidden, ungroupSelection } from "../actions";
 import { store, useStore } from "../store";
@@ -142,6 +143,16 @@ function onKeyDown(e: KeyboardEvent) {
     if (p) {
       e.preventDefault();
       applyStyle(p.style);
+    }
+    return;
+  }
+  // While the library is open, 1–9 and 0 insert its first ten items (at the mouse).
+  if (s.side === "library" && /^Digit[0-9]$/.test(e.code) && !e.altKey) {
+    const k = e.code === "Digit0" ? 9 : parseInt(e.code.slice(5)) - 1;
+    const item = libraryStore.items()[k];
+    if (item) {
+      e.preventDefault();
+      insertLibraryItem(item, lastCanvasPoint());
     }
     return;
   }
