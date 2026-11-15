@@ -1,6 +1,6 @@
 // Right-click menu for the selection.
 import { useEffect } from "react";
-import { copy, deleteSelection, duplicate, flipH, flipV, reorder, smartLabel } from "../actions";
+import { copy, deleteSelection, duplicate, flipH, flipV, groupSelection, reorder, smartLabel, toggleHidden, ungroupSelection } from "../actions";
 import { saveSelectionToLibrary } from "../library";
 import { store, useStore } from "../store";
 
@@ -39,7 +39,11 @@ export function ContextMenu() {
       <span className="pkey">{k}</span>
     </button>
   );
-  const labels = store.selected().every((o) => o.type === "label");
+  const objs = store.selected();
+  const labels = objs.every((o) => o.type === "label");
+  const hidden = objs.every((o) => o.hidden);
+  const textCurve = objs.length === 1 && objs[0].type === "curve" && !!objs[0].text;
+  const grouped = objs.some((o) => o.group);
   return (
     <div className="context-menu" style={{ left: Math.min(menu.x, window.innerWidth - 200), top: Math.min(menu.y, window.innerHeight - 300) }} data-testid="context-menu" onContextMenu={(e) => e.preventDefault()}>
       {item("Bring to front", "⌘]", () => reorder("front"), "menu-front")}
@@ -48,6 +52,9 @@ export function ContextMenu() {
       {item("Send to back", "⌘[", () => reorder("back"), "menu-back")}
       <div className="sep" />
       {!labels && item("Add label", "⇧T", smartLabel)}
+      {item(hidden ? (textCurve ? "Show the line" : "Show") : textCurve ? "Hide the line" : "Hide", "⇧⌘H", toggleHidden, "menu-hide")}
+      {objs.length > 1 && item("Group", "⌘G", groupSelection, "menu-group")}
+      {grouped && item("Ungroup", "⇧⌘G", ungroupSelection, "menu-ungroup")}
       {item("Copy", "⌘C", copy)}
       {item("Duplicate", "⌘D", duplicate)}
       {item("Flip horizontally", "⇧H", flipH)}

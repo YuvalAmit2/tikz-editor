@@ -15,9 +15,23 @@ export interface Style {
   dash: Dash;
   /** xcolor expression, or null for no fill. */
   fill: string | null;
+  /** Hatching in the fill colour instead of a solid fill (a TikZ pattern). */
+  pattern?: Pattern | null;
   arrowStart: boolean;
   arrowEnd: boolean;
 }
+
+export type Pattern = "north east lines" | "north west lines" | "horizontal lines" | "vertical lines" | "crosshatch" | "dots";
+
+/** Patterns offered in the style panel, with a short name. */
+export const PATTERNS: { p: Pattern; name: string }[] = [
+  { p: "north east lines", name: "Hatched ⟋" },
+  { p: "north west lines", name: "Hatched ⟍" },
+  { p: "horizontal lines", name: "Horizontal lines" },
+  { p: "vertical lines", name: "Vertical lines" },
+  { p: "crosshatch", name: "Crosshatch" },
+  { p: "dots", name: "Dots" },
+];
 
 export const DEFAULT_STYLE: Style = {
   stroke: "black",
@@ -76,6 +90,11 @@ interface Base {
   /** Where the object was cut into pieces when a piece was styled (chain
    *  parameters): kept so the pieces stay even if what crossed it goes. */
   cuts?: number[];
+  /** Hidden: shown faintly in the editor, left out of the TikZ. On a curve
+   *  with text along it, only the line is hidden. */
+  hidden?: boolean;
+  /** Objects with the same group id are selected and moved together. */
+  group?: string;
 }
 
 export interface PartStyle {

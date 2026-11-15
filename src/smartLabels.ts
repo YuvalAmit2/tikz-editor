@@ -1,7 +1,7 @@
 // Smart labels are placed with a guessed size when created; once the label
 // has been typed and compiled, it's placed again with its real size (once).
 import { getLabel, labelBox, labelStore } from "./labels/render";
-import { placeLabel } from "./model/labelPlace";
+import { labelCrossesLines, placeLabel } from "./model/labelPlace";
 import type { LabelObj, Obj, Scene, Vec } from "./model/types";
 import { store } from "./store";
 
@@ -43,23 +43,34 @@ export function followRef(objs: Obj[]): Vec | null {
   return { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length };
 }
 
-/** Labels whose objects moved go with them (or find a clear spot again). */
-export function followLabels(scene: Scene): Scene {
+/** Labels whose objects moved go with them. While dragging (a preview) they
+ *  just move along, so they don't jump about; when the change is made, a
+ *  label that keeps clear of lines and now crosses one (because its object
+ *  moved, or something was drawn through it) finds a clear spot again. A
+ *  label just moved by hand stays where it was put. */
+export function followLabels(scene: Scene, prev: Scene | null, final: boolean): Scene {
   let changed: LabelObj[] | null = null;
+  const before = new Map((prev?.objects ?? []).map((o) => [o.id, o]));
   for (const o of scene.objects) {
     if (o.type !== "label" || !o.follow || o.follow.off) continue;
     const targets = scene.objects.filter((x) => o.follow!.ids.includes(x.id));
     const ref = followRef(targets);
     if (!ref) continue;
     const d = { x: ref.x - o.follow.ref.x, y: ref.y - o.follow.ref.y };
-    if (Math.hypot(d.x, d.y) < 1e-9) continue;
-    let next: LabelObj;
+    const moved = Math.hypot(d.x, d.y) > 1e-9;
+    let next: LabelObj = moved ? { ...o, p: { x: o.p.x + d.x, y: o.p.y + d.y }, follow: { ...o.follow, ref } } : o;
+    const old = before.get(o.id) as LabelObj | undefined;
+    // Moved by hand: it moved by something other than what its objects did.
+    const byHand = !!old?.follow && Math.hypot(o.p.x - old.p.x - (o.follow.ref.x - old.follow.ref.x), o.p.y - old.p.y - (o.follow.ref.y - old.follow.ref.y)) > 1e-9;
     const b = labelBox(o);
-    if (o.follow.avoid && b && !o.attach) {
-      const { p, anchor } = placeLabel(targets, scene.objects, { w: b.maxX - b.minX, h: b.maxY - b.minY }, labelBox, [o.id]);
-      next = { ...o, p, anchor, follow: { ...o.follow, ref } };
-    } else next = { ...o, p: { x: o.p.x + d.x, y: o.p.y + d.y }, follow: { ...o.follow, ref } };
-    (changed ??= []).push(next);
+    if (final && o.follow.avoid && b && !o.attach && !byHand) {
+      const size = { w: b.maxX - b.minX, h: b.maxY - b.minY };
+      if (labelCrossesLines(next.p, next.anchor, size, scene.objects, [o.id])) {
+        const { p, anchor } = placeLabel(targets, scene.objects, size, labelBox, [o.id]);
+        next = { ...next, p, anchor };
+      }
+    }
+    if (next !== o) (changed ??= []).push(next);
   }
   if (!changed) return scene;
   const m = new Map(changed.map((o) => [o.id, o as Obj]));

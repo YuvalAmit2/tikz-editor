@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 import type { Box } from "./model/geometry";
 import { DEFAULT_SETTINGS, type Settings } from "./model/settings";
 import type { SnapResult } from "./model/snap";
+import type { Guide } from "./model/guides";
 import { DEFAULT_STYLE, emptyScene, type Obj, type Scene, type Style } from "./model/types";
 
 export type ToolName = "select" | "line" | "polyline" | "curve" | "sketch" | "rect" | "circle" | "ellipse" | "fill" | "point" | "text" | "trim";
@@ -62,6 +63,10 @@ export interface AppState {
   pieceHover: { id: string; at: number } | null;
   /** Right-click menu, at a screen position. */
   menu: { x: number; y: number } | null;
+  /** Smart guides shown while drawing or moving. */
+  guides: Guide[];
+  /** The snapping menu is open. */
+  snapMenu: boolean;
 }
 
 type Listener = () => void;
@@ -95,6 +100,8 @@ class Store {
     pieceSel: null,
     pieceHover: null,
     menu: null,
+    guides: [],
+    snapMenu: false,
   };
   private listeners = new Set<Listener>();
   private undoStack: Scene[] = [];
@@ -114,22 +121,23 @@ class Store {
   };
 
   /** Applied to every new scene (labels that follow their objects). */
-  sceneHook: ((s: Scene) => Scene) | null = null;
+  sceneHook: ((s: Scene, prev: Scene | null, final: boolean) => Scene) | null = null;
 
   /** Replace the scene and record the previous one for undo. `before`
    *  overrides the recorded state (used when a drag previewed changes
    *  without recording them). */
   commit(scene: Scene, extra: Partial<AppState> = {}, before?: Scene) {
-    this.undoStack.push(before ?? this.state.scene);
+    const prev = before ?? this.state.scene;
+    this.undoStack.push(prev);
     if (this.undoStack.length > 500) this.undoStack.shift();
     this.redoStack = [];
-    if (this.sceneHook) scene = this.sceneHook(scene);
+    if (this.sceneHook) scene = this.sceneHook(scene, prev, true);
     this.set({ scene, dirty: true, ...extra });
   }
 
   /** Change the scene without recording history (live previews). */
   preview(scene: Scene) {
-    if (this.sceneHook) scene = this.sceneHook(scene);
+    if (this.sceneHook) scene = this.sceneHook(scene, this.state.scene, false);
     this.set({ scene });
   }
 
@@ -200,4 +208,11 @@ export function askText(title: string, opts: { initial?: string; placeholder?: s
       },
     });
   });
+}
+
+/** The selection grown to whole groups (objects grouped with ⌘G go together). */
+export function withGroups(ids: string[], objects: Obj[] = store.get().scene.objects): string[] {
+  const groups = new Set(objects.filter((o) => o.group && ids.includes(o.id)).map((o) => o.group));
+  if (!groups.size) return ids;
+  return [...new Set([...ids, ...objects.filter((o) => o.group && groups.has(o.group)).map((o) => o.id)])];
 }

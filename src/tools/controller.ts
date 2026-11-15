@@ -13,6 +13,7 @@ import {
   type Box,
 } from "../model/geometry";
 import { buildSnapIndex, snap, visibleGrid, type SnapIndex, type SnapResult } from "../model/snap";
+import { boxGuides, pointGuides, type GuideCtx } from "../model/guides";
 import { DEFAULT_STYLE, newId, type CurveNode, type CurveObj, type EllipseObj, type Obj, type PathObj, type Scene, type Vec } from "../model/types";
 import { nodeHandles, sampleCurve } from "../model/curve";
 import { processStroke } from "../model/sketch";
@@ -20,7 +21,7 @@ import { piecesToObj, trimAt, type Piece } from "../model/trim";
 import { regionAt } from "../model/region";
 import { closestOnSegment, distToSegment as distToSeg, pathSegments, rotationAbout } from "../model/geometry";
 import { labelBox } from "../labels/render";
-import { store, type ToolName } from "../store";
+import { store, withGroups, type ToolName } from "../store";
 
 export interface PEvent {
   world: Vec;
@@ -68,27 +69,83 @@ const lbox = (o: Obj) => (o.type === "label" ? labelBox(o) : null);
 
 // Rebuilt only when the objects it's built from change: while dragging, the
 // dragged objects are excluded and the others stay the same objects.
-let snapCache: { objs: Obj[]; index: SnapIndex } | null = null;
-function snapIndex(exclude: string[] = []): SnapIndex {
+let snapCache: { objs: Obj[]; index: SnapIndex; guides: GuideCtx } | null = null;
+function snapData(exclude: string[] = []) {
   const ex = new Set(exclude);
   const objs = store.get().scene.objects.filter((o) => !ex.has(o.id));
-  if (snapCache && snapCache.objs.length === objs.length && snapCache.objs.every((o, i) => o === objs[i])) return snapCache.index;
-  const index = buildSnapIndex(objs);
-  snapCache = { objs, index };
-  return index;
+  if (snapCache && snapCache.objs.length === objs.length && snapCache.objs.every((o, i) => o === objs[i])) return snapCache;
+  snapCache = { objs, index: buildSnapIndex(objs), guides: guideCtx(objs) };
+  return snapCache;
+}
+const snapIndex = (exclude: string[] = []) => snapData(exclude).index;
+
+/** What smart guides line things up with. */
+function guideCtx(objs: Obj[]): GuideCtx {
+  const points: Vec[] = [];
+  const boxes: Box[] = [];
+  const axesX: number[] = [];
+  const axesY: number[] = [];
+  for (const o of objs) {
+    if (o.hidden) continue;
+    if (o.type === "path") points.push(...o.pts);
+    else if (o.type === "curve") points.push(...o.nodes.map((n) => n.p));
+    else if (o.type === "ellipse") points.push(o.c);
+    else if (o.type === "point") points.push(o.p);
+    const b = o.type === "label" ? labelBox(o) : geomBox(o);
+    if (!b) continue;
+    boxes.push(b);
+    if (o.type !== "point" && o.type !== "label" && b.maxX - b.minX > 1e-6 && b.maxY - b.minY > 1e-6) {
+      const c = { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
+      // A shape's centre (e.g. of a rectangle) is a point to line up with too.
+      if (o.type !== "ellipse") points.push(c);
+      axesX.push(c.x);
+      axesY.push(c.y);
+    }
+  }
+  return { points, boxes, axesX: [...new Set(axesX)], axesY: [...new Set(axesY)] };
 }
 
-function doSnap(p: Vec, e: PEvent, opts: { exclude?: string[]; from?: Vec | null } = {}): SnapResult {
+/** Guides snap lightly: a smaller radius than points do. */
+const guideRadius = () => {
   const { settings, view } = store.get();
-  return snap(p, snapIndex(opts.exclude), {
+  return (settings.snapRadiusPx * 0.6) / view.zoom;
+};
+const guidesOn = (e: PEvent) => {
+  const st = store.get().settings;
+  return !e.alt && st.snapToObjects && st.snapKinds.guides;
+};
+const STRONG = new Set(["vertex", "midpoint", "center", "quadrant", "intersection", "grid-crossing"]);
+
+function doSnap(p: Vec, e: PEvent, opts: { exclude?: string[]; from?: Vec | null; noGuides?: boolean } = {}): SnapResult {
+  const { settings, view } = store.get();
+  const angle = !!(e.shift && opts.from);
+  const sr = snap(p, snapIndex(opts.exclude), {
     radius: settings.snapRadiusPx / view.zoom,
     gridSize: settings.gridSize,
     gridPx: view.zoom,
     snapToGrid: settings.snapToGrid,
     snapToObjects: settings.snapToObjects,
-    angleFrom: e.shift && opts.from ? opts.from : null,
+    angleFrom: angle ? opts.from : null,
     disabled: e.alt,
+    kinds: settings.snapKinds,
   });
+  if (opts.noGuides || angle || STRONG.has(sr.kind) || !guidesOn(e)) {
+    if (store.get().guides.length) store.set({ guides: [] });
+    return sr;
+  }
+  const ctx = snapData(opts.exclude).guides;
+  // Points placed so far in the shape being drawn count too.
+  const extra = [...draft, ...cdraft.map((n) => n.p)];
+  const g = pointGuides(p, extra.length ? { ...ctx, points: [...ctx.points, ...extra] } : ctx, guideRadius());
+  if (g.x === null && g.y === null) {
+    if (store.get().guides.length) store.set({ guides: [] });
+    return sr;
+  }
+  // The other coordinate: the grid's (not a point on an object, which would
+  // pull it off the guide).
+  const base = sr.kind === "on-object" ? snap(p, null, { radius: settings.snapRadiusPx / view.zoom, gridSize: settings.gridSize, gridPx: view.zoom, snapToGrid: settings.snapToGrid, snapToObjects: false }).p : sr.p;
+  store.set({ guides: g.guides });
+  return { p: { x: (g.x ?? base.x) + 0, y: (g.y ?? base.y) + 0 }, kind: "guide" };
 }
 
 // ---------------------------------------------------------------- handles
@@ -467,10 +524,10 @@ function paintBucket(p: Vec) {
   if (!r) return store.flash("No closed region here");
   if (r.whole) {
     const o = store.objById(r.whole)!;
-    store.commit(store.withReplaced([{ ...o, style: { ...o.style, fill } } as Obj]), { selection: [o.id] });
+    store.commit(store.withReplaced([{ ...o, style: { ...o.style, fill, pattern: s.style.pattern ?? null } } as Obj]), { selection: [o.id] });
     return;
   }
-  const shape = piecesToObj(r.pieces, { id: "", type: "path", style: { ...DEFAULT_STYLE, stroke: null, fill }, pts: [], closed: false } as Obj)!;
+  const shape = piecesToObj(r.pieces, { id: "", type: "path", style: { ...DEFAULT_STYLE, stroke: null, fill, pattern: s.style.pattern ?? null }, pts: [], closed: false } as Obj)!;
   let closed: Obj;
   if (shape.type === "path") closed = { ...shape, pts: shape.pts.slice(0, -1), closed: true };
   else {
@@ -588,10 +645,12 @@ function selectDown(e: PEvent) {
     return;
   }
   let selection = s.selection;
+  // A grouped object brings its whole group.
+  const whole = withGroups([hit.id], s.scene.objects);
   if (e.shift) {
-    selection = selection.includes(hit.id) ? selection.filter((x) => x !== hit.id) : [...selection, hit.id];
+    selection = selection.includes(hit.id) ? selection.filter((x) => !whole.includes(x)) : [...new Set([...selection, ...whole])];
   } else if (!selection.includes(hit.id)) {
-    selection = [hit.id];
+    selection = whole;
   }
   // A click selects (and lets you drag); a double-click edits a label's text.
   store.set({ selection, editingLabel: null });
@@ -617,7 +676,7 @@ export function onContextMenu(e: PEvent, client: Vec) {
   const s = store.get();
   if (s.tool !== "select") return;
   const hit = objectAt(e.world);
-  if (hit && !s.selection.includes(hit.id)) store.set({ selection: [hit.id], editingLabel: null });
+  if (hit && !s.selection.includes(hit.id)) store.set({ selection: withGroups([hit.id], s.scene.objects), editingLabel: null });
   if (!hit && !s.selection.length) return;
   store.set({ menu: client });
 }
@@ -642,8 +701,25 @@ export function onPointerMove(e: PEvent) {
       drag.moved = true;
       const exclude = drag.orig.map((o) => o.id);
       const target = add(drag.ref, sub(e.world, drag.ref));
-      const sr = doSnap(target, e, { exclude, from: drag.ref });
-      const d = sub(sr.p, drag.ref);
+      let sr = doSnap(target, e, { exclude, from: drag.ref, noGuides: true });
+      let d = sub(sr.p, drag.ref);
+      // Smart guides for the moved box (edges, centre, spacing), else for the grabbed point.
+      if (!STRONG.has(sr.kind) && sr.kind !== "angle" && guidesOn(e)) {
+        let b: Box | null = null;
+        for (const o of drag.orig) b = unionBox(b, o.type === "label" ? labelBox(o) : geomBox(o));
+        const ctx = snapData(exclude).guides;
+        const raw = sub(target, drag.ref);
+        let g = b && (b.maxX - b.minX > 1e-6 || b.maxY - b.minY > 1e-6) ? boxGuides(b, raw, ctx, guideRadius()) : null;
+        if (!g || (g.x === null && g.y === null)) {
+          const pg = pointGuides(target, ctx, guideRadius());
+          g = { x: pg.x === null ? null : pg.x - drag.ref.x, y: pg.y === null ? null : pg.y - drag.ref.y, guides: pg.guides };
+        }
+        if (g.x !== null || g.y !== null) {
+          d = { x: (g.x ?? d.x) + 0, y: (g.y ?? d.y) + 0 };
+          sr = { p: add(drag.ref, d), kind: "guide" };
+        }
+        store.set({ guides: g.guides });
+      } else if (s.guides.length) store.set({ guides: [] });
       const m = { a: 1, b: 0, c: 0, d: 1, e: d.x, f: d.y };
       store.set({ snap: sr });
       store.preview(store.withReplaced(drag.orig.map((o) => transformObj(o, m)), drag.before));
@@ -657,7 +733,7 @@ export function onPointerMove(e: PEvent) {
         maxY: Math.max(drag.start.y, e.world.y),
       };
       const inside = s.scene.objects.filter((o) => insideBox(o, b, lbox)).map((o) => o.id);
-      store.set({ marquee: b, selection: [...new Set([...drag.base, ...inside])] });
+      store.set({ marquee: b, selection: withGroups([...new Set([...drag.base, ...inside])], s.scene.objects) });
       return;
     }
     case "rotate": {
@@ -819,7 +895,7 @@ export function onPointerMove(e: PEvent) {
     }
     store.set({ snap: sr, preview });
   } else {
-    if (s.snap) store.set({ snap: null });
+    if (s.snap || s.guides.length) store.set({ snap: null, guides: [] });
     const h = handleAt(e);
     const hint = editTargets().length && !h ? (insertPointAt(e)?.p ?? null) : null;
     if (hint || s.insertHint) store.set({ insertHint: hint });
@@ -832,6 +908,7 @@ export function onPointerUp(e: PEvent) {
   const s = store.get();
   const d = drag;
   drag = { kind: "none" };
+  if (s.guides.length) store.set({ guides: [] });
   switch (d.kind) {
     case "move": {
       if (!d.moved) return;

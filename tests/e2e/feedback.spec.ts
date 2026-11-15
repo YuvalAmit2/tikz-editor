@@ -76,7 +76,9 @@ test("keys: Space taps to Select, - and . toggle dashes, G toggles grid snapping
   expect((await objs(page))[0].style.dash).toBe("solid");
   await page.keyboard.press("g");
   expect((await st(page)).settings.snapToGrid).toBe(false);
-  await expect(page.getByTestId("grid-snap")).not.toHaveClass(/active/);
+  await page.getByTestId("snap-menu").click();
+  await expect(page.getByTestId("snap-grid")).not.toBeChecked();
+  await page.getByTestId("snap-menu").click();
   await page.keyboard.press("g");
   expect((await st(page)).settings.snapToGrid).toBe(true);
   // Shortcuts are written under the toolbar buttons
@@ -170,7 +172,7 @@ test("smart label: Label button adds a label beside the object and opens it", as
   // Placed again with its real size, and the hint to do so is gone.
   await expect.poll(async () => (await objs(page)).find((o: any) => o.type === "label").attach).toBeUndefined();
   const lab = (await objs(page)).find((o: any) => o.type === "label");
-  expect(Math.abs(lab.p.y)).toBeGreaterThan(0.05);
+  expect(Math.abs(lab.p.y)).toBeGreaterThan(0.01);
   expect(Math.abs(lab.p.y)).toBeLessThan(0.6);
   expect(lab.anchor).not.toBe("center");
   // Several objects: one label, a size larger

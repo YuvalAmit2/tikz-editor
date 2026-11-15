@@ -1,11 +1,11 @@
-import { applyProps, applyStyle, deleteSelection, saveSettings, smartLabel } from "../actions";
+import { applyProps, applyStyle, deleteSelection, groupSelection, saveSettings, smartLabel, toggleHidden, ungroupSelection } from "../actions";
 import { ColorPicker } from "./ColorPicker";
 import { followRef } from "../smartLabels";
 import { geomBox } from "../model/geometry";
 import { toChain } from "../model/trim";
 import { saveSelectionToLibrary } from "../library";
 import { useState } from "react";
-import { FONT_SIZES, LINE_WIDTHS, type Obj, type Style } from "../model/types";
+import { FONT_SIZES, LINE_WIDTHS, PATTERNS, type Obj, type Pattern, type Style } from "../model/types";
 import { componentAt, componentPieces, components, componentStyles, piecesSvgD } from "../model/parts";
 import { PALETTE, TINTS, isCustomColor, xcolorCss } from "../model/xcolor";
 import { askText, store, useStore } from "../store";
@@ -244,6 +244,19 @@ export function StylePanel() {
           {fillBase && (
             <Seg value={fillTint} onPick={(t) => applyStyle({ fill: withTint(fillBase, t) })} options={TINTS.map((t) => ({ v: t, label: `${t}%`, title: `${fillBase}!${t}` }))} />
           )}
+          <div className="patterns" data-testid="fill-patterns">
+            {[{ p: null as Pattern | null, name: "Solid" }, ...PATTERNS].map(({ p, name }) => (
+              <button
+                key={name}
+                className={(st.pattern ?? null) === p ? "active" : ""}
+                title={p ? `${name} (TikZ pattern ${p})` : "Solid fill"}
+                data-testid={"pattern-" + (p ?? "solid").replace(/ /g, "-")}
+                onClick={() => applyStyle({ pattern: p, fill: st.fill ?? (p ? "black" : null) })}
+              >
+                <PatternIcon p={p} />
+              </button>
+            ))}
+          </div>
         </section>
       )}
 
@@ -341,6 +354,26 @@ export function StylePanel() {
       {tool === "sketch" && objs.length === 0 && <SketchOptions />}
 
       {objs.length > 0 && (
+        <section>
+          <label className="check-row" title={objs.length === 1 && objs[0].type === "curve" && objs[0].text ? "Hide the line; the text along it stays" : "Hidden objects aren't in the TikZ; they show faintly here"}>
+            <input type="checkbox" checked={objs.every((o) => o.hidden)} onChange={toggleHidden} data-testid="hide-toggle" />
+            <span>{objs.length === 1 && objs[0].type === "curve" && objs[0].text ? "Hide the line" : "Hidden"}</span>
+            <K k="⇧⌘H" />
+          </label>
+          {objs.length > 1 && !objs.every((o) => o.group && o.group === objs[0].group) && (
+            <button className="text-btn" onClick={groupSelection} data-testid="group-btn">
+              Group <K k="⌘G" />
+            </button>
+          )}
+          {objs.some((o) => o.group) && (
+            <button className="text-btn" onClick={ungroupSelection} data-testid="ungroup-btn">
+              Ungroup <K k="⇧⌘G" />
+            </button>
+          )}
+        </section>
+      )}
+
+      {objs.length > 0 && (
         <section className="panel-actions">
           {!onlyLabels && (
             <button className="text-btn" onClick={smartLabel} title="Add a label next to this (⇧T)" data-testid="smart-label">
@@ -359,7 +392,8 @@ export function StylePanel() {
   );
 }
 
-/** Text written along a curve (TikZ's "text along path"); the curve itself isn't drawn. */
+/** Text written along a curve (TikZ's "text along path"). The line is drawn
+ *  too unless it's hidden. */
 function CurveText({ o }: { o: Extract<Obj, { type: "curve" }> }) {
   const [draft, setDraft] = useState<string | null>(null);
   const value = draft ?? o.text ?? "";
@@ -469,4 +503,20 @@ function objTitle(o: Obj): string {
     case "label":
       return "Label";
   }
+}
+
+/** A small swatch of a fill pattern. */
+function PatternIcon({ p }: { p: Pattern | null }) {
+  const L = (d: string) => <path d={d} stroke="currentColor" strokeWidth="1" />;
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18">
+      <rect x="1" y="1" width="16" height="16" rx="2" fill={p ? "none" : "currentColor"} fillOpacity={0.35} stroke="currentColor" strokeWidth="1" />
+      {p === "north east lines" && L("M1 9L9 1M1 17L17 1M9 17L17 9")}
+      {p === "north west lines" && L("M9 1L17 9M1 1L17 17M1 9L9 17")}
+      {p === "horizontal lines" && L("M1 5H17M1 9H17M1 13H17")}
+      {p === "vertical lines" && L("M5 1V17M9 1V17M13 1V17")}
+      {p === "crosshatch" && L("M1 6H17M1 12H17M6 1V17M12 1V17")}
+      {p === "dots" && [5, 9, 13].flatMap((x) => [5, 9, 13].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1" fill="currentColor" />))}
+    </svg>
+  );
 }

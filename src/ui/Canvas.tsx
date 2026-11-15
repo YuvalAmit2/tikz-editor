@@ -107,6 +107,7 @@ export function Canvas() {
         {s.settings.showGrid && <Grid size={size} z={z} tx={tx} ty={ty} grid={s.settings.gridSize} />}
         {s.settings.showTextWidthGuide && <TextWidthGuide size={size} z={z} tx={tx} widthCm={s.settings.textWidthCm} />}
         <g transform={`matrix(${z},0,0,${-z},${tx},${ty})`}>
+          <PatternDefs objects={[...s.scene.objects, ...s.preview]} />
           {s.scene.objects.map((o) => (
             <ObjView key={o.id} o={o} z={z} />
           ))}
@@ -122,6 +123,7 @@ export function Canvas() {
         </g>
         <SelectionOverlay toScreen={toScreen} multi={s.selection.length > 1} />
         {s.marquee && <MarqueeRect b={s.marquee} toScreen={toScreen} />}
+        <Guides toScreen={toScreen} />
         {showSnap && s.snap && <SnapMark p={toScreen(s.snap.p)} kind={s.snap.kind} />}
         {s.insertHint && editTargets().length > 0 && <InsertHint p={toScreen(s.insertHint)} />}
       </svg>
@@ -141,9 +143,38 @@ function strokeProps(st: Style, z: number) {
     stroke: xcolorCss(st.stroke),
     strokeWidth: w,
     strokeDasharray: dash,
-    fill: xcolorCss(st.fill),
+    fill: st.fill && st.pattern ? `url(#${patternId(st.pattern, st.fill)})` : xcolorCss(st.fill),
     strokeMiterlimit: 10,
   };
+}
+
+const patternId = (p: string, color: string) => "pat-" + (p + "-" + color).replace(/[^a-zA-Z0-9]/g, "_");
+
+/** SVG patterns for the hatched fills in use (TikZ's patterns: 3pt apart). */
+function PatternDefs({ objects }: { objects: Obj[] }) {
+  const used = new Map<string, { p: string; c: string }>();
+  for (const o of objects) if (o.style.pattern && o.style.fill) used.set(patternId(o.style.pattern, o.style.fill), { p: o.style.pattern, c: o.style.fill });
+  if (!used.size) return null;
+  const t = ptToCm(3);
+  const w = ptToCm(0.4);
+  return (
+    <defs>
+      {[...used].map(([id, { p, c }]) => {
+        const col = xcolorCss(c);
+        const line = (x1: number, y1: number, x2: number, y2: number) => <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={col} strokeWidth={w} />;
+        return (
+          <pattern key={id} id={id} patternUnits="userSpaceOnUse" width={t} height={t}>
+            {p === "north east lines" && <>{line(-t / 2, -t / 2, t * 1.5, t * 1.5)}{line(-t / 2, t / 2, t / 2, t * 1.5)}{line(t / 2, -t / 2, t * 1.5, t / 2)}</>}
+            {p === "north west lines" && <>{line(-t / 2, t * 1.5, t * 1.5, -t / 2)}{line(-t / 2, t / 2, t / 2, -t / 2)}{line(t / 2, t * 1.5, t * 1.5, t / 2)}</>}
+            {p === "horizontal lines" && line(0, t / 2, t, t / 2)}
+            {p === "vertical lines" && line(t / 2, 0, t / 2, t)}
+            {p === "crosshatch" && <>{line(0, t / 2, t, t / 2)}{line(t / 2, 0, t / 2, t)}</>}
+            {p === "dots" && <circle cx={t / 2} cy={t / 2} r={ptToCm(0.5)} fill={col} />}
+          </pattern>
+        );
+      })}
+    </defs>
+  );
 }
 
 /** A TikZ-like "to" arrow tip at `tip`, pointing along `dir`. */
@@ -197,7 +228,24 @@ function CurveTextView({ o }: { o: Extract<Obj, { type: "curve" }> }) {
 }
 
 function ObjView({ o, z }: { o: Obj; z: number }) {
-  if (o.type === "curve" && o.text) return <CurveTextView o={o} />;
+  if (o.type === "curve" && o.text)
+    return (
+      <g data-id={o.id}>
+        <ObjView o={{ ...o, text: undefined }} z={z} />
+        <CurveTextView o={o} />
+      </g>
+    );
+  // Hidden: faint, so it can still be found and selected.
+  if (o.hidden)
+    return (
+      <g opacity={0.22} data-hidden="1">
+        <VisibleObjView o={o} z={z} />
+      </g>
+    );
+  return <VisibleObjView o={o} z={z} />;
+}
+
+function VisibleObjView({ o, z }: { o: Obj; z: number }) {
   if (o.parts?.length && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) return <PartedView o={o} z={z} />;
   return <PlainObjView o={o} z={z} />;
 }
@@ -436,7 +484,7 @@ function InsertHint({ p }: { p: Vec }) {
 
 function SnapMark({ p, kind }: { p: Vec; kind: string }) {
   // Big enough to show around the tip of the mouse pointer.
-  if (kind === "grid" || kind === "angle") return <circle cx={p.x} cy={p.y} r={4} fill={SEL} stroke="white" strokeWidth={1.5} pointerEvents="none" data-testid="snap-dot" />;
+  if (kind === "grid" || kind === "angle" || kind === "guide") return <circle cx={p.x} cy={p.y} r={4} fill={SEL} stroke="white" strokeWidth={1.5} pointerEvents="none" data-testid="snap-dot" />;
   return (
     <g pointerEvents="none">
       <rect x={p.x - 5} y={p.y - 5} width={10} height={10} fill="none" stroke="#e8590c" strokeWidth={1.5} transform={kind === "intersection" ? `rotate(45 ${p.x} ${p.y})` : undefined} />
@@ -478,6 +526,43 @@ function TextWidthGuide({ size, z, tx, widthCm }: { size: { w: number; h: number
       <text x={xs[0] + 6} y={16} fontSize={11} fill="#a07f10" fontFamily="system-ui, sans-serif">
         text width ({widthCm} cm)
       </text>
+    </g>
+  );
+}
+
+/** Smart guides: alignment, equal spacing and symmetry found while snapping. */
+function Guides({ toScreen }: { toScreen: (p: Vec) => Vec }) {
+  const guides = useStore((s) => s.guides);
+  if (!guides.length) return null;
+  const C = "#e0368c";
+  return (
+    <g pointerEvents="none" data-testid="guides">
+      {guides.map((g, i) => {
+        const a = toScreen(g.a);
+        const b = toScreen(g.b);
+        if (g.kind === "spacing") {
+          // A measured gap: a line with end ticks.
+          const d = sub(b, a);
+          const l = len(d) || 1;
+          const n = { x: (-d.y / l) * 4, y: (d.x / l) * 4 };
+          return (
+            <g key={i} stroke={C} strokeWidth={1}>
+              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} />
+              <line x1={a.x - n.x} y1={a.y - n.y} x2={a.x + n.x} y2={a.y + n.y} />
+              <line x1={b.x - n.x} y1={b.y - n.y} x2={b.x + n.x} y2={b.y + n.y} />
+            </g>
+          );
+        }
+        return (
+          <g key={i}>
+            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={C} strokeWidth={1} strokeDasharray={g.kind === "symmetry" ? "5 3" : undefined} />
+            {(g.marks ?? []).map((m, k) => {
+              const q = toScreen(m);
+              return <path key={k} d={`M${q.x - 3},${q.y - 3}L${q.x + 3},${q.y + 3}M${q.x - 3},${q.y + 3}L${q.x + 3},${q.y - 3}`} stroke={C} strokeWidth={1.2} />;
+            })}
+          </g>
+        );
+      })}
     </g>
   );
 }

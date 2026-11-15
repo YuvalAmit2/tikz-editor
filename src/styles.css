@@ -851,3 +851,16 @@ button {
 .mode-seg button:disabled { cursor: default; }
 .library-item:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .text-row input { width: 100%; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
+
+/* Snapping menu */
+.snap-slot { position: relative; display: inline-flex; }
+.snap-menu { position: absolute; top: 100%; left: 0; z-index: 50; min-width: 220px; margin-top: 4px; }
+.snap-menu .menu-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #888); padding: 4px 8px 2px; }
+.snap-menu .check-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+.snap-menu .check-item:hover { background: var(--accent-soft); }
+.snap-menu .check-item .pkey { margin-left: auto; }
+.snap-menu .menu-note { font-size: 11px; color: var(--muted, #888); padding: 4px 8px; }
+
+.patterns { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+.patterns button { border: 1px solid var(--line); background: var(--bg, #fff); border-radius: 6px; padding: 3px; line-height: 0; cursor: pointer; color: #555; }
+.patterns button.active { border-color: var(--accent, #2f6fed); color: var(--accent, #2f6fed); box-shadow: 0 0 0 1px var(--accent, #2f6fed); }

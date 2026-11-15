@@ -69,6 +69,8 @@ On a line of its own a figure is centred. Sizes scale the drawing only; labels k
 | Arrow keys | Nudge by about 15 screen px in grid steps (finer when zoomed in; Shift: four, Alt: a fifth) |
 | ⌘Z ⇧⌘Z ⌘C ⌘V ⌘D ⌘A | Undo, redo, copy, paste, duplicate, select all |
 | ⌘] ⌘[ | Bring to front, send to back |
+| ⌘G, ⇧⌘G | Group, ungroup (grouped objects are selected and moved together) |
+| ⇧⌘H | Hide or show (hidden objects are faint here and left out of the TikZ; on a curve with text, only its line hides) |
 | ⌘K | Command palette (every command and library figure) |
 | ⌘S ⌘O ⌘N ⌘, | Save, open, new, settings |
 | ⌘Enter | Save and go back (hides the window) |
@@ -91,6 +93,8 @@ In the text panel: labels are **math by default** (`\cO_K`), but a label contain
 **Text along a curve:** select an open curve and type into "Text along the curve" in the style panel; the curve is replaced by the text (TikZ's `decorations.text`, which `tikzfig.sty` loads; pasted pictures need `\usetikzlibrary{decorations.text}`).
 
 **Colours:** the rainbow swatch opens a colour picker (hex too); colours you make are kept as swatches (right-click one to remove it). They're written as `{rgb,255:red,…}`, which needs no extra package.
+
+**Snapping**: the magnet button in the toolbar picks what to snap to (grid, points, midpoints, centres, crossings, lines and curves, smart guides). Smart guides snap lightly to alignment with other objects' points and edges, equal spacing between objects, and mirror images about an object's centre line, and show a pink guide when they do.
 
 **Grid snapping** is magnetic per axis: near a grid line, that coordinate sticks to it and the other one stays free, so you can slide along a grid line.
 

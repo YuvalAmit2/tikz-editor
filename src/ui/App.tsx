@@ -30,7 +30,7 @@ import { initSmartLabels } from "../smartLabels";
 import { LINE_WIDTHS } from "../model/types";
 import { cancelDraft, deleteActiveNode, finishCurve, finishPolyline, hasDraft, insertAtHint, removeLastDraftPoint, setSpaceDown, spaceWasUsed } from "../tools/controller";
 import { ContextMenu } from "./ContextMenu";
-import { smartLabel, toggleDash, toggleGridSnap } from "../actions";
+import { groupSelection, smartLabel, toggleDash, toggleGridSnap, toggleHidden, ungroupSelection } from "../actions";
 import { store, useStore } from "../store";
 import { Canvas } from "./Canvas";
 import { SettingsDialog } from "./SettingsDialog";
@@ -74,6 +74,9 @@ function onKeyDown(e: KeyboardEvent) {
     if (k === "d") return handled(), duplicate();
     if (k === ",") return handled(), store.set({ showSettings: true });
     if (k === "k") return handled(), store.set({ palette: true });
+    if (k === "g" && e.shiftKey) return handled(), ungroupSelection();
+    if (k === "g") return handled(), groupSelection();
+    if (k === "h" && e.shiftKey) return handled(), toggleHidden();
     if (k === "]") return handled(), reorder("front");
     if (k === "[") return handled(), reorder("back");
     if (k === "=" || k === "+") return handled(), zoomAt(1.25);

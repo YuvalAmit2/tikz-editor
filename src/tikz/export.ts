@@ -25,13 +25,14 @@ const coord = (p: { x: number; y: number }) => `(${fmt(p.x)},${fmt(p.y)})`;
 function styleOpts(s: Style, opts: { arrows: boolean }): string[] {
   const o: string[] = [];
   if (s.stroke) o.push(s.stroke === "black" ? "draw" : `draw=${s.stroke}`);
-  if (s.fill) o.push(`fill=${s.fill}`);
+  if (s.fill && s.pattern) o.push(`pattern=${s.pattern}`, s.fill === "black" ? "" : `pattern color=${s.fill}`);
+  else if (s.fill) o.push(`fill=${s.fill}`);
   if (s.stroke) {
     if (Math.abs(s.width - 0.4) > 1e-9) o.push(`line width=${fmt(s.width)}pt`);
     if (s.dash !== "solid") o.push(s.dash);
     if (opts.arrows && (s.arrowStart || s.arrowEnd)) o.push(`${s.arrowStart ? "<" : ""}-${s.arrowEnd ? ">" : ""}`);
   }
-  return o;
+  return o.filter(Boolean);
 }
 
 /** An object with styled pieces: its fill, then one \path per stretch. */
@@ -56,6 +57,21 @@ function partedToTikz(o: Obj, others: Obj[]): string | null {
 
 function objToTikz(o: Obj, others: Obj[] = []): string | null {
   if (o.type === "curve" && o.text) {
+    // The line (unless hidden), then the text along it.
+    const line = o.hidden ? null : objToTikz({ ...o, text: undefined }, others);
+    const text = curveTextTikz(o);
+    return [line, text].filter(Boolean).join("\n") || null;
+  }
+  if (o.hidden) return null;
+  if (o.parts?.length && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) {
+    const t = partedToTikz(o, others);
+    if (t !== null) return t;
+  }
+  return plainToTikz(o);
+}
+
+function curveTextTikz(o: Extract<Obj, { type: "curve" }>): string | null {
+  {
     const segs = curveSegments(o);
     if (!segs.length) return null;
     let body = coord(segs[0].a);
@@ -64,10 +80,9 @@ function objToTikz(o: Obj, others: Obj[] = []): string | null {
     const text = (fmtTxt ? `|${fmtTxt}|` : "") + o.text;
     return `\\path[decorate,decoration={text along path,text={${text}},text align=center}] ${body};`;
   }
-  if (o.parts?.length && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) {
-    const t = partedToTikz(o, others);
-    if (t !== null) return t;
-  }
+}
+
+function plainToTikz(o: Obj): string | null {
   switch (o.type) {
     case "path": {
       if (o.pts.length < 2) return null;
@@ -134,7 +149,8 @@ export function sceneToPicture(scene: Scene): string {
   const m = box ? translation(-Math.round(((box.minX + box.maxX) / 2) * 4) / 4, -Math.round(((box.minY + box.maxY) / 2) * 4) / 4) : null;
   const objs = m ? scene.objects.map((o) => transformObj(o, m)) : scene.objects;
   const lines: string[] = [];
-  if (objs.some((o) => o.type === "curve" && o.text)) lines.push("% needs \\usetikzlibrary{decorations.text}");
+  const libs = [objs.some((o) => o.type === "curve" && o.text) && "decorations.text", objs.some((o) => o.style.pattern && o.style.fill && !o.hidden) && "patterns"].filter(Boolean);
+  if (libs.length) lines.push(`% needs \\usetikzlibrary{${libs.join(",")}}`);
   lines.push("\\begin{tikzpicture}");
   for (const o of objs) {
     const t = objToTikz(o, objs);

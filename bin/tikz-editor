@@ -23,12 +23,20 @@ if ! command -v npm >/dev/null 2>&1 && [ -s "$HOME/.nvm/nvm.sh" ]; then
   . "$HOME/.nvm/nvm.sh" >/dev/null
 fi
 
+# VS Code's extension host sets this; it would make Electron run as plain Node.
+unset ELECTRON_RUN_AS_NODE
+
 cd "$here"
 if [ ! -f dist/index.html ] || [ ! -f dist-electron/main.cjs ] ||
    [ -n "$(find src server electron index.html -newer dist/index.html -print -quit 2>/dev/null)" ]; then
   echo "Building TikZ Editor…" >&2
   npm run build >/dev/null 2>&1 || { echo "tikz-editor: the build failed; run 'npm run build' in $here to see why" >&2; exit 1; }
 fi
+
+# The app that opened the figure (e.g. VS Code): ⌘Enter switches back to it.
+ret=${__CFBundleIdentifier:-}
+if [ -z "$ret" ] && [ -n "${VSCODE_PID:-}" ]; then ret=com.microsoft.VSCode; fi
+if [ -n "$ret" ]; then args+=("--return-to=$ret"); fi
 
 # The Electron binary itself (node_modules/.bin/electron would need Node).
 electron="$here/node_modules/electron/dist/$(cat "$here/node_modules/electron/path.txt")"

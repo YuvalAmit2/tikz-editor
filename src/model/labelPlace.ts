@@ -90,7 +90,7 @@ function candidates(targets: Obj[], gap: number): Candidate[] {
   };
   if (targets.length === 1) {
     const o = targets[0];
-    if (o.type === "point") around(o.p, gap + 0.07);
+    if (o.type === "point") around(o.p, gap + 0.04);
     if (o.type === "ellipse") {
       // On the ellipse, pushed outwards.
       for (const deg of [45, 0, 90, 135, 315, 180, 270, 225]) {
@@ -159,6 +159,17 @@ function candidates(targets: Obj[], gap: number): Candidate[] {
   return out;
 }
 
+/** Does a label box at p (with this anchor) cross any line of the scene? */
+export function labelCrossesLines(p: Vec, anchor: Anchor, size: { w: number; h: number }, scene: Obj[], ignore: string[] = []): boolean {
+  const ign = new Set(ignore);
+  const b = boxAt(p, anchor, size);
+  // A little inside the box: touching the label's padding is fine.
+  const s = 0.03;
+  const inner = { minX: b.minX + s, minY: b.minY + s, maxX: b.maxX - s, maxY: b.maxY - s };
+  if (inner.minX > inner.maxX || inner.minY > inner.maxY) return false;
+  return strokes(scene.filter((o) => o.type !== "label" && !ign.has(o.id) && !o.hidden)).some(([a, e]) => segHitsBox(a, e, inner));
+}
+
 /** Best spot and anchor for a label of the given size labelling `targets`. */
 export function placeLabel(
   targets: Obj[],
@@ -167,9 +178,10 @@ export function placeLabel(
   labelBoxOf: (o: LabelObj) => Box | null,
   ignore: string[] = [],
 ): { p: Vec; anchor: Anchor } {
-  const gap = 0.08;
+  // The label's own inner sep (about 1.2 mm) already keeps it off the line.
+  const gap = 0.02;
   const ign = new Set(ignore);
-  const segs = strokes(scene.filter((o) => o.type !== "label" && !ign.has(o.id)));
+  const segs = strokes(scene.filter((o) => o.type !== "label" && !ign.has(o.id) && !o.hidden));
   const labels = scene.filter((o): o is LabelObj => o.type === "label" && !ign.has(o.id)).map(labelBoxOf).filter((b): b is Box => !!b);
   let best: Candidate | null = null;
   let bestScore = Infinity;

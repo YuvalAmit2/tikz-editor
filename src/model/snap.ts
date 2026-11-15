@@ -12,9 +12,13 @@ import {
   segIntersect,
 } from "./geometry";
 import type { EllipseObj, Obj, Vec } from "./types";
+import { DEFAULT_SNAP_KINDS, type SnapKinds } from "./settings";
 import { sampleCurve } from "./curve";
 
-export type SnapKind = "vertex" | "midpoint" | "center" | "quadrant" | "intersection" | "grid-crossing" | "on-object" | "grid" | "angle" | "none";
+export type SnapKind = "vertex" | "midpoint" | "center" | "quadrant" | "intersection" | "grid-crossing" | "on-object" | "grid" | "angle" | "guide" | "none";
+
+/** Which menu entry each kind of special point belongs to. */
+const KIND_GROUP: Partial<Record<SnapKind, keyof SnapKinds>> = { vertex: "points", midpoint: "midpoints", center: "centres", quadrant: "centres", intersection: "intersections" };
 
 export interface SnapResult {
   p: Vec;
@@ -109,6 +113,7 @@ export interface SnapOptions {
   angleFrom?: Vec | null;
   /** Alt held: no snapping at all. */
   disabled?: boolean;
+  kinds?: SnapKinds;
 }
 
 export function snapGrid(p: Vec, g: number): Vec {
@@ -138,6 +143,8 @@ export function snapGridLines(p: Vec, gridSize: number, pxPerCm: number, radius:
 
 export function snap(p: Vec, index: SnapIndex | null, o: SnapOptions): SnapResult {
   if (o.disabled) return { p, kind: "none" };
+  const kinds = o.kinds ?? DEFAULT_SNAP_KINDS;
+  const allowed = (k: SnapKind) => kinds[KIND_GROUP[k] ?? "points"];
 
   if (o.angleFrom) {
     const from = o.angleFrom;
@@ -152,7 +159,7 @@ export function snap(p: Vec, index: SnapIndex | null, o: SnapOptions): SnapResul
       for (const c of index.points) {
         const t = (c.p.x - from.x) * dir.x + (c.p.y - from.y) * dir.y;
         const onRay = { x: from.x + dir.x * t, y: from.y + dir.y * t };
-        if (t > 0 && dist(onRay, c.p) < 1e-6 && Math.abs(t - r) < o.radius) return { p: c.p, kind: c.kind };
+        if (allowed(c.kind) && t > 0 && dist(onRay, c.p) < 1e-6 && Math.abs(t - r) < o.radius) return { p: c.p, kind: c.kind };
       }
     }
     if (o.snapToGrid) {
@@ -168,6 +175,7 @@ export function snap(p: Vec, index: SnapIndex | null, o: SnapOptions): SnapResul
     // Special points win over everything else; intersections and vertices
     // first when equally close.
     for (const c of index.points) {
+      if (!allowed(c.kind)) continue;
       const d = dist(c.p, p);
       if (d < bd - 1e-9) {
         bd = d;
@@ -178,7 +186,7 @@ export function snap(p: Vec, index: SnapIndex | null, o: SnapOptions): SnapResul
     // A point on an object that's also on a grid line beats either alone
     // (when the object is near enough to snap onto at all).
     const near = o.radius * 0.6;
-    if (o.snapToGrid) {
+    if (o.snapToGrid && kinds.onObjects) {
       const g = o.gridPx ? visibleGrid(o.gridSize, o.gridPx) : o.gridSize;
       const segs: [Vec, Vec][] = index.segments.filter(([a, b]) => dist(closestOnSegment(p, a, b), p) < near);
       for (const e of index.ellipses) {
@@ -211,7 +219,7 @@ export function snap(p: Vec, index: SnapIndex | null, o: SnapOptions): SnapResul
       if (bestG) return { p: bestG, kind: "grid-crossing" };
     }
     let bestOn: Vec | null = null;
-    bd = o.radius * 0.6;
+    bd = kinds.onObjects ? o.radius * 0.6 : 0;
     for (const [a, b] of index.segments) {
       const q = closestOnSegment(p, a, b);
       const d = dist(q, p);

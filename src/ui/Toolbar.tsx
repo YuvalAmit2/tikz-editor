@@ -1,4 +1,5 @@
-import { copyTikz, flipH, flipV, newFigure, open, rotate90, save, setTool, toggleGridSnap } from "../actions";
+import { useEffect, useRef } from "react";
+import { copyTikz, flipH, flipV, newFigure, open, rotate90, save, setSnapKind, setTool } from "../actions";
 import { store, useStore, type ToolName } from "../store";
 
 const I = ({ children }: { children: React.ReactNode }) => (
@@ -43,7 +44,6 @@ export function Toolbar() {
   const filePath = useStore((s) => s.filePath);
   const dirty = useStore((s) => s.dirty);
   const hasSel = useStore((s) => s.selection.length > 0);
-  const snapGrid = useStore((s) => s.settings.snapToGrid);
   const name = filePath ? filePath.split(/[\\/]/).pop() : "Untitled";
   return (
     <div className="toolbar">
@@ -80,9 +80,7 @@ export function Toolbar() {
       </div>
       <div className="sep" />
       <div className="group">
-        <Btn k="G" active={snapGrid} title="Snap to grid (G)" testid="grid-snap" onClick={toggleGridSnap}>
-          <I><path d="M3 7h14M3 13h14M7 3v14M13 3v14" strokeWidth="1.1" /><circle cx="13" cy="7" r="2" fill="currentColor" stroke="none" /></I>
-        </Btn>
+        <SnapMenu />
       </div>
       <div className="spacer" />
       <div className="filename" title={filePath ?? "Not saved yet"}>
@@ -105,5 +103,60 @@ export function Toolbar() {
         </Btn>
       </div>
     </div>
+  );
+}
+
+const SNAP_ITEMS: { k: "grid" | "points" | "midpoints" | "centres" | "intersections" | "onObjects" | "guides"; label: string; hint?: string }[] = [
+  { k: "grid", label: "Grid", hint: "G" },
+  { k: "points", label: "Points and ends" },
+  { k: "midpoints", label: "Midpoints" },
+  { k: "centres", label: "Centres of circles" },
+  { k: "intersections", label: "Crossings" },
+  { k: "onObjects", label: "On lines and curves" },
+  { k: "guides", label: "Smart guides", hint: "align, spacing, symmetry" },
+];
+
+/** The snapping button: a menu of what to snap to. */
+function SnapMenu() {
+  const open = useStore((s) => s.snapMenu);
+  const st = useStore((s) => s.settings);
+  const root = useRef<HTMLSpanElement>(null);
+  const on = (k: (typeof SNAP_ITEMS)[number]["k"]) => (k === "grid" ? st.snapToGrid : st.snapToObjects && st.snapKinds[k]);
+  const any = SNAP_ITEMS.some((i) => on(i.k));
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: MouseEvent) => {
+      if (root.current && !root.current.contains(e.target as Node)) store.set({ snapMenu: false });
+    };
+    const key = (e: KeyboardEvent) => e.key === "Escape" && store.set({ snapMenu: false });
+    window.addEventListener("mousedown", down, true);
+    window.addEventListener("keydown", key, true);
+    return () => {
+      window.removeEventListener("mousedown", down, true);
+      window.removeEventListener("keydown", key, true);
+    };
+  }, [open]);
+  return (
+    <span className="snap-slot" ref={root}>
+      <Btn title="Snapping" active={any} testid="snap-menu" onClick={() => store.set({ snapMenu: !open })}>
+        <I><path d="M5 4v6a5 5 0 0010 0V4" /><path d="M5 4h3v6a2 2 0 004 0V4h3" /><path d="M5 7h3M12 7h3" strokeWidth="1.2" /></I>
+      </Btn>
+      {open && (
+        <div className="context-menu snap-menu" data-testid="snap-menu-list">
+          <div className="menu-title">Snap to</div>
+          {SNAP_ITEMS.map((i) => (
+            <label key={i.k} className="check-item">
+              <input type="checkbox" checked={on(i.k)} onChange={(e) => {
+                  void setSnapKind(i.k, e.target.checked);
+                  e.target.blur(); // keys go back to the canvas
+                }} data-testid={"snap-" + i.k} />
+              <span>{i.label}</span>
+              {i.hint && <span className="pkey">{i.hint}</span>}
+            </label>
+          ))}
+          <div className="menu-note">⌥ while dragging: no snapping</div>
+        </div>
+      )}
+    </span>
   );
 }

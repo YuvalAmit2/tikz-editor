@@ -348,3 +348,35 @@ export function smartLabel() {
   setTool("select");
   store.commit({ ...s.scene, objects: [...s.scene.objects, o] }, { selection: [o.id], editingLabel: o.id });
 }
+
+/** Hide the selection (left out of the TikZ, faint here), or show it again. */
+export function toggleHidden() {
+  const sel = store.selected();
+  if (!sel.length) return store.flash("Select something to hide");
+  const hide = !sel.every((o) => o.hidden);
+  store.commit(store.withReplaced(sel.map((o) => ({ ...o, hidden: hide || undefined }) as Obj)));
+  store.flash(hide ? (sel.length === 1 && sel[0].type === "curve" && sel[0].text ? "Line hidden (the text stays)" : "Hidden: not in the TikZ") : "Shown again");
+}
+
+/** ⌘G: the selection becomes one group (selected and moved together). */
+export function groupSelection() {
+  const sel = store.selected();
+  if (sel.length < 2) return store.flash("Select two or more objects to group");
+  const g = newId();
+  store.commit(store.withReplaced(sel.map((o) => ({ ...o, group: g }) as Obj)));
+  store.flash("Grouped");
+}
+
+/** ⇧⌘G: take the selected groups apart. */
+export function ungroupSelection() {
+  const sel = store.selected().filter((o) => o.group);
+  if (!sel.length) return store.flash("Nothing grouped is selected");
+  store.commit(store.withReplaced(sel.map((o) => ({ ...o, group: undefined }) as Obj)));
+  store.flash("Ungrouped");
+}
+
+export async function setSnapKind(k: keyof Settings["snapKinds"] | "grid", on: boolean) {
+  const st = store.get().settings;
+  if (k === "grid") return saveSettings({ ...st, snapToGrid: on });
+  await saveSettings({ ...st, snapToObjects: on ? true : st.snapToObjects, snapKinds: { ...st.snapKinds, [k]: on } });
+}

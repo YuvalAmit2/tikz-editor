@@ -22,13 +22,17 @@
 % With both width and height, the figure fits inside both.
 %
 % Change the default folder with \renewcommand\tikzfigdir{figures/}.
+% A centred figure gets \tikzfigskip of extra space above and below
+% (\setlength\tikzfigskip{0pt} for none).
 \NeedsTeXFormat{LaTeX2e}
 \ProvidesPackage{tikzfig}[2026/11/14 TikZ Editor figures]
 \RequirePackage{tikz}
-% Text written along curves.
-\usetikzlibrary{decorations.text}
+% Text written along curves; hatched fills.
+\usetikzlibrary{decorations.text,patterns}
 
 \newcommand\tikzfigdir{graphics/}
+\newlength\tikzfigskip
+\setlength\tikzfigskip{0.5\baselineskip}
 
 \pgfkeys{
   /tikzfig/.is family, /tikzfig/.cd,
@@ -75,7 +79,7 @@
     \ifnum\tikzfig@inline=0 \ifvmode
       % A line of its own: centred (just \centering inside a float).
       \ifx\@captype\@undefined
-        \begin{center}\tikzfig@picture\tikzfig@dolabel\end{center}%
+        \begin{center}\vspace{\tikzfigskip}\tikzfig@picture\tikzfig@dolabel\par\vspace{\tikzfigskip}\end{center}%
       \else
         {\centering\tikzfig@picture\tikzfig@dolabel\par}%
       \fi

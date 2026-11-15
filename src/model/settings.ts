@@ -17,6 +17,8 @@ export interface Settings {
   showGrid: boolean;
   snapToGrid: boolean;
   snapToObjects: boolean;
+  /** What snapping goes to (the snapping menu). */
+  snapKinds: SnapKinds;
   /** Snap radius in screen pixels. */
   snapRadiusPx: number;
   /** The \documentclass line of the documents figures go into (only the
@@ -52,12 +54,28 @@ export interface Settings {
   toolKeys: Record<string, string>;
 }
 
+export interface SnapKinds {
+  /** Vertices, ends, anchors and dots. */
+  points: boolean;
+  midpoints: boolean;
+  /** Centres and quadrant points of circles and ellipses. */
+  centres: boolean;
+  intersections: boolean;
+  /** Anywhere on a line or curve. */
+  onObjects: boolean;
+  /** Smart guides: alignment, equal spacing, symmetry. */
+  guides: boolean;
+}
+
+export const DEFAULT_SNAP_KINDS: SnapKinds = { points: true, midpoints: true, centres: true, intersections: true, onObjects: true, guides: true };
+
 export const DEFAULT_SETTINGS: Settings = {
   returnToSelect: true,
   gridSize: 0.25,
   showGrid: true,
   snapToGrid: true,
   snapToObjects: true,
+  snapKinds: DEFAULT_SNAP_KINDS,
   snapRadiusPx: 10,
   documentClass: "\\documentclass[11pt]{article}",
   preamble: "\\usepackage[notes]{yalatex}",
@@ -78,7 +96,7 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export function withDefaults(s: Partial<Settings> | undefined): Settings {
-  return { ...DEFAULT_SETTINGS, ...(s ?? {}) };
+  return { ...DEFAULT_SETTINGS, ...(s ?? {}), snapKinds: { ...DEFAULT_SNAP_KINDS, ...(s?.snapKinds ?? {}) } };
 }
 
 /** Used when snippetFile is empty. */
