@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import { marksOf, marksTikz } from "../../src/model/marks";
 import { freshCopies, nextNumbered } from "../../src/model/copies";
 import { withAttached } from "../../src/model/attach";
+import { graphPieces, parseExpr } from "../../src/model/expr";
+import { sampleCurve } from "../../src/model/curve";
+import { parsePlot } from "../../src/insert";
 import { translation } from "../../src/model/geometry";
 import { fmt, sceneToPicture, sceneToTikz } from "../../src/tikz/export";
 import { DEFAULT_STYLE, type Obj } from "../../src/model/types";
@@ -90,5 +93,43 @@ describe("⌘D counts labels up", () => {
     expect(nextNumbered("\\infty")).toBe("\\infty");
     expect(nextNumbered("\\R^2")).toBe("\\R^2");
     expect(nextNumbered("p_1^2")).toBe("p_2^2");
+  });
+});
+
+describe("plotting a function", () => {
+  it("reads the usual notation", () => {
+    const at = (s: string, x: number) => parseExpr(s)(x);
+    expect(at("x^2 - 1", 3)).toBe(8);
+    expect(at("-x^2", 2)).toBe(-4);
+    expect(at("2x + 1", 2)).toBe(5);
+    expect(at("3sin(x)", Math.PI / 2)).toBeCloseTo(3);
+    expect(at("(x+1)(x-1)", 2)).toBe(3);
+    expect(at("2^3^2", 0)).toBe(512);
+    expect(at("|x| + sqrt 4", -1)).toBe(3);
+    expect(at("e^x", 1)).toBeCloseTo(Math.E);
+    expect(at("\\sin(\\pi x)", 0.5)).toBeCloseTo(1);
+    expect(() => parseExpr("x +")).toThrow();
+    expect(() => parseExpr("foo(x)")).toThrow(/foo/);
+  });
+
+  it("the curve follows the function closely", () => {
+    const f = parseExpr("x^3/3 - x");
+    const [pts] = graphPieces(f, -2.2, 2.2);
+    const c = { nodes: pts.map((p) => ({ p, mode: "smooth" as const })), closed: false };
+    let worst = 0;
+    for (const p of sampleCurve(c, 20)) worst = Math.max(worst, Math.abs(p.y - f(p.x)));
+    expect(worst).toBeLessThan(0.01);
+  });
+
+  it("splits where the function is undefined or jumps", () => {
+    expect(graphPieces(parseExpr("1/x"), -2, 2)).toHaveLength(2);
+    expect(graphPieces(parseExpr("tan(x)"), -3, 3)).toHaveLength(3);
+    expect(graphPieces(parseExpr("sqrt(x)"), -1, 1)).toHaveLength(1);
+  });
+
+  it("the range of x is optional", () => {
+    expect(parsePlot("y = x^2, -1, 2", { cx: 0, w: 10 })).toMatchObject({ a: -1, b: 2 });
+    expect(parsePlot("x^2", { cx: 0, w: 10 })).toMatchObject({ a: -3.5, b: 3.5 });
+    expect(parsePlot("sin(x), -pi, pi", { cx: 0, w: 10 }).b).toBeCloseTo(Math.PI);
   });
 });
