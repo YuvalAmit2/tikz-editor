@@ -25,3 +25,12 @@ export function freshCopies(objs: Obj[], m: Affine): Obj[] {
     return c;
   });
 }
+
+/** "a_1" → "a_2", "z_{9}" → "z_{10}": the last numbered subscript in a
+ *  label, counted up (for ⌘D, so a row of a_1, a_2, … comes quickly).
+ *  Other numbers (\R^2, 2\pi) stay as they are. */
+export function nextNumbered(text: string): string {
+  const m = text.match(/^(.*_\{?)(\d+)(.*)$/s);
+  if (!m) return text;
+  return m[1] + String(parseInt(m[2], 10) + 1) + m[3];
+}

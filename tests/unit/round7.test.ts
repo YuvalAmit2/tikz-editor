@@ -1,7 +1,7 @@
 // Seventh round (overnight testing): arrows in the middle, copies.
 import { describe, expect, it } from "vitest";
 import { marksOf, marksTikz } from "../../src/model/marks";
-import { freshCopies } from "../../src/model/copies";
+import { freshCopies, nextNumbered } from "../../src/model/copies";
 import { withAttached } from "../../src/model/attach";
 import { translation } from "../../src/model/geometry";
 import { fmt, sceneToPicture, sceneToTikz } from "../../src/tikz/export";
@@ -79,5 +79,16 @@ describe("lines follow their dots", () => {
     expect(cc.type === "curve" && cc.nodes[1].p).toEqual({ x: 3, y: 1 });
     // A dot elsewhere: nothing else moves.
     expect(withAttached([{ ...d, p: { x: 5, y: 5 } }], [moved], [line(0), c])).toHaveLength(1);
+  });
+});
+
+describe("⌘D counts labels up", () => {
+  it("the last number goes up by one", () => {
+    expect(nextNumbered("a_1")).toBe("a_2");
+    expect(nextNumbered("z_{9}")).toBe("z_{10}");
+    expect(nextNumbered("x_1 + y_2")).toBe("x_1 + y_3");
+    expect(nextNumbered("\\infty")).toBe("\\infty");
+    expect(nextNumbered("\\R^2")).toBe("\\R^2");
+    expect(nextNumbered("p_1^2")).toBe("p_2^2");
   });
 });

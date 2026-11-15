@@ -11,7 +11,7 @@ import { cancelDraft, lastPick, selectionBox } from "./tools/controller";
 import { askText, store, TRUE_ZOOM, type ToolName } from "./store";
 import { labelBox } from "./labels/render";
 import { followRef } from "./smartLabels";
-import { freshCopies } from "./model/copies";
+import { freshCopies, nextNumbered } from "./model/copies";
 import { withAttached } from "./model/attach";
 
 export function setTool(tool: ToolName) {
@@ -76,7 +76,7 @@ function pasteOffset(): number {
   return Math.min(2 * g, g * Math.pow(2, Math.round(Math.log2(20 / (g * view.zoom)))));
 }
 
-function pasteObjs(objs: Obj[], offset: number): Obj[] {
+function pasteObjs(objs: Obj[], offset: number, count = false): Obj[] {
   if (objs.length === 0) return [];
   const s = store.get();
   let m = translation(offset, -offset);
@@ -90,12 +90,13 @@ function pasteObjs(objs: Obj[], offset: number): Obj[] {
     const seen = b.maxX > view.minX && b.minX < view.maxX && b.maxY > view.minY && b.minY < view.maxY;
     if (!seen) m = translation(v.cx - (b.minX + b.maxX) / 2 + offset, v.cy - (b.minY + b.maxY) / 2 - offset);
   }
-  return addCopies(objs, m);
+  return addCopies(objs, m, count);
 }
 
-function addCopies(objs: Obj[], m: ReturnType<typeof translation>): Obj[] {
+function addCopies(objs: Obj[], m: ReturnType<typeof translation>, count = false): Obj[] {
   const s = store.get();
-  const copies = freshCopies(objs, m);
+  // ⌘D counts labels up: a_1 → a_2.
+  const copies = freshCopies(objs, m).map((o) => (count && o.type === "label" ? { ...o, text: nextNumbered(o.text) } : o));
   store.commit({ ...s.scene, objects: [...s.scene.objects, ...copies] }, { selection: copies.map((o) => o.id), tool: "select" });
   return copies;
 }
@@ -121,13 +122,13 @@ export function duplicate() {
       const dx = (bc.minX + bc.maxX - bs.minX - bs.maxX) / 2;
       const dy = (bc.minY + bc.maxY - bs.minY - bs.maxY) / 2;
       if (Math.hypot(dx, dy) > 1e-9) {
-        const copies = addCopies(sel, translation(dx, dy));
+        const copies = addCopies(sel, translation(dx, dy), true);
         lastDup = { src: sel.map((o) => o.id), copies: copies.map((o) => o.id) };
         return;
       }
     }
   }
-  const copies = pasteObjs(sel, pasteOffset());
+  const copies = pasteObjs(sel, pasteOffset(), true);
   lastDup = { src: sel.map((o) => o.id), copies: copies.map((o) => o.id) };
 }
 

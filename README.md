@@ -67,7 +67,7 @@ On a line of its own a figure is centred. Sizes scale the drawing only; labels k
 | Right-click | Menu: front/back, forward/backward, label, copy, duplicate, flip, library, delete |
 | ⇧H ⇧V ⇧R | Flip horizontally / vertically, rotate 90° |
 | Arrow keys | Nudge by about 15 screen px in grid steps (finer when zoomed in; Shift: four, Alt: a fifth) |
-| ⌘Z ⇧⌘Z ⌘C ⌘V ⌘D ⌘A | Undo, redo, copy, paste, duplicate, select all. ⌘D on a copy you just moved repeats the move (⌘D, drag, ⌘D ⌘D … for evenly spaced copies) |
+| ⌘Z ⇧⌘Z ⌘C ⌘V ⌘D ⌘A | Undo, redo, copy, paste, duplicate, select all. ⌘D on a copy you just moved repeats the move (⌘D, drag, ⌘D ⌘D … for evenly spaced copies), and counts subscripts up (a_1, a_2, …) |
 | ⌘] ⌘[ | Bring to front, send to back |
 | ⌘G, ⇧⌘G | Group, ungroup (grouped objects are selected and moved together) |
 | ⇧⌘H | Hide or show (hidden objects are faint here and left out of the TikZ; on a curve with text, only its line hides) |
