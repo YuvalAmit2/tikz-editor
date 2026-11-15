@@ -330,6 +330,8 @@ function buildShape(tool: ToolName, a: Vec, b: Vec, shift: boolean): Obj | null 
   const id = newId();
   switch (tool) {
     case "line":
+      // The Line tool's menu: a curly brace is a line drawn as a brace.
+      if (store.get().lineKind === "brace") return { id, type: "path", style: { ...style, fill: null, wave: "brace", arrowStart: false, arrowEnd: false, mid: undefined }, pts: [a, b], closed: false };
       return { id, type: "path", style: { ...style, fill: null }, pts: [a, b], closed: false };
     case "rect": {
       let w = b.x - a.x;
@@ -529,21 +531,24 @@ function paintBucket(p: Vec) {
   const fill = s.style.fill ?? (s.style.stroke && s.style.stroke !== "black" ? `${s.style.stroke}!30` : "gray!30");
   const r = regionAt(s.scene.objects, p);
   if (!r) return store.flash("No closed region here");
+  // Back to Select afterwards, like the other tools (Settings).
+  const after = s.settings.returnToSelect ? { tool: "select" as const } : {};
   if (r.whole) {
     const o = store.objById(r.whole)!;
-    store.commit(store.withReplaced([{ ...o, style: { ...o.style, fill, pattern: s.style.pattern ?? null } } as Obj]), { selection: [o.id] });
+    store.commit(store.withReplaced([{ ...o, style: { ...o.style, fill, pattern: s.style.pattern ?? null } } as Obj]), { selection: [o.id], ...after });
     return;
   }
-  const shape = piecesToObj(r.pieces, { id: "", type: "path", style: { ...DEFAULT_STYLE, stroke: null, fill, pattern: s.style.pattern ?? null }, pts: [], closed: false } as Obj)!;
-  let closed: Obj;
-  if (shape.type === "path") closed = { ...shape, pts: shape.pts.slice(0, -1), closed: true };
-  else {
+  const closedShape = (pieces: Piece[]): PathObj | CurveObj => {
+    const shape = piecesToObj(pieces, { id: "", type: "path", style: { ...DEFAULT_STYLE, stroke: null, fill, pattern: s.style.pattern ?? null }, pts: [], closed: false } as Obj)!;
+    if (shape.type === "path") return { ...shape, pts: shape.pts.slice(0, -1), closed: true };
     const c = shape as CurveObj;
     const last = c.nodes[c.nodes.length - 1];
-    closed = { ...c, nodes: c.nodes.slice(0, -1).map((n, i) => (i === 0 ? { ...n, hin: last.hin } : n)), closed: true };
-  }
+    return { ...c, nodes: c.nodes.slice(0, -1).map((n, i) => (i === 0 ? { ...n, hin: last.hin } : n)), closed: true };
+  };
+  const outer = closedShape(r.pieces);
+  const closed: Obj = r.holes?.length ? { ...outer, holes: r.holes.map(closedShape) } : outer;
   // Behind everything, so the lines around it stay on top.
-  store.commit({ ...s.scene, objects: [closed, ...s.scene.objects] }, { selection: [closed.id] });
+  store.commit({ ...s.scene, objects: [closed, ...s.scene.objects] }, { selection: [closed.id], ...after });
 }
 
 // ---------------------------------------------------------------- events

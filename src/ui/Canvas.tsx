@@ -4,10 +4,11 @@ import { getLabel, labelBox, labelImage, labelNodeBox, labelStore } from "../lab
 import { ptToCm, sub, len, type Box } from "../model/geometry";
 import type { Obj, Style, Vec } from "../model/types";
 import { patternLook, xcolorCss } from "../model/xcolor";
-import { halo, marksOf } from "../model/marks";
+import { marksOf } from "../model/marks";
+import { strokeRuns } from "../model/height";
 import { waved } from "../model/wave";
 import { curvePathD, curveSegments } from "../model/curve";
-import { componentPieces, piecesSvgD, styledRuns } from "../model/parts";
+import { componentPieces, piecesSvgD } from "../model/parts";
 import {
   editTargets,
   getHandles,
@@ -270,15 +271,41 @@ function ObjView({ o, z }: { o: Obj; z: number }) {
 }
 
 function VisibleObjView({ o, z }: { o: Obj; z: number }) {
-  const h = halo(o);
-  if (h)
-    return (
-      <g data-id={o.id}>
-        <PlainObjView o={h} z={z} />
-        <VisibleObjView o={{ ...o, style: { ...o.style, gap: undefined } } as Obj} z={z} />
-      </g>
-    );
-  if (o.parts?.length && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) return <PartedView o={o} z={z} />;
+  if ((o.parts?.length || o.cross?.length) && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) return <PartedView o={o} z={z} />;
+  return <NoPartsView o={o} z={z} />;
+}
+
+/** An object whose line is drawn in stretches (pieces with their own
+ *  stroke, gaps where something goes over it): the fill, then each stretch
+ *  with its own look, then the arrowheads. */
+function PartedView({ o, z }: { o: Obj; z: number }) {
+  const objects = useStore((s) => s.scene.objects);
+  const sr = strokeRuns(o, objects);
+  if (!sr) return <NoPartsView o={o} z={z} />;
+  const { runs } = sr;
+  const firstRun = runs.find((r) => r.first);
+  const lastRun = runs.find((r) => r.last);
+  const p0 = firstRun?.pieces[0];
+  const pn = lastRun?.pieces[lastRun.pieces.length - 1];
+  const dirFrom = (p: NonNullable<typeof p0>, end: boolean) => {
+    const at = end ? p.b : p.a;
+    return (end ? [p.c2, p.c1, p.a] : [p.c1, p.c2, p.b]).find((c) => Math.hypot(c.x - at.x, c.y - at.y) > 1e-6) ?? (end ? p.a : p.b);
+  };
+  return (
+    <g data-id={o.id}>
+      {sr.fill && <PlainObjView o={sr.fill} z={z} />}
+      {runs.map((r, i) => (
+        <path key={i} d={piecesSvgD(r.pieces)} {...strokeProps(r.style, z)} fill="none" data-run="1" />
+      ))}
+      {sr.arrowEnd && pn && lastRun!.style.stroke && <ArrowTip tip={pn.b} from={dirFrom(pn, true)} st={lastRun!.style} z={z} />}
+      {sr.arrowStart && p0 && firstRun!.style.stroke && <ArrowTip tip={p0.a} from={dirFrom(p0, false)} st={firstRun!.style} z={z} />}
+      <MidMarks o={o} st={{ ...o.style, dash: "solid" }} z={z} />
+    </g>
+  );
+}
+
+/** Drawn as if it had no pieces or crossings (a wave, or a plain line). */
+function NoPartsView({ o, z }: { o: Obj; z: number }) {
   const w = waved(o);
   if (w)
     return (
@@ -290,41 +317,19 @@ function VisibleObjView({ o, z }: { o: Obj; z: number }) {
   return <PlainObjView o={o} z={z} />;
 }
 
-/** An object some of whose pieces have their own stroke: the fill, then each
- *  stretch with its own look, then the arrowheads. */
-function PartedView({ o, z }: { o: Obj; z: number }) {
-  const objects = useStore((s) => s.scene.objects);
-  const runs = styledRuns(o, objects);
-  if (!runs) return <PlainObjView o={o} z={z} />;
-  const firstRun = runs.find((r) => r.first);
-  const lastRun = runs.find((r) => r.last);
-  const p0 = firstRun?.pieces[0];
-  const pn = lastRun?.pieces[lastRun.pieces.length - 1];
-  const dirFrom = (p: NonNullable<typeof p0>, end: boolean) => {
-    const at = end ? p.b : p.a;
-    return (end ? [p.c2, p.c1, p.a] : [p.c1, p.c2, p.b]).find((c) => Math.hypot(c.x - at.x, c.y - at.y) > 1e-6) ?? (end ? p.a : p.b);
-  };
-  return (
-    <g data-id={o.id}>
-      {o.style.fill && <PlainObjView o={{ ...o, style: { ...o.style, stroke: null } } as Obj} z={z} />}
-      {runs.map((r, i) => (
-        <path key={i} d={piecesSvgD(r.pieces)} {...strokeProps(r.style, z)} fill="none" />
-      ))}
-      {o.style.arrowEnd && pn && lastRun!.style.stroke && <ArrowTip tip={pn.b} from={dirFrom(pn, true)} st={lastRun!.style} z={z} />}
-      {o.style.arrowStart && p0 && firstRun!.style.stroke && <ArrowTip tip={p0.a} from={dirFrom(p0, false)} st={firstRun!.style} z={z} />}
-      <MidMarks o={o} st={{ ...o.style, dash: "solid" }} z={z} />
-    </g>
-  );
+/** The holes of a filled shape, as more SVG subpaths. */
+function holesD(o: { holes?: Obj[] }): string {
+  return (o.holes ?? []).map((h) => (h.type === "path" ? " " + h.pts.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ") + " Z" : h.type === "curve" ? " " + curvePathD(h) : "")).join("");
 }
 
 function PlainObjView({ o, z }: { o: Obj; z: number }) {
   switch (o.type) {
     case "path": {
-      const d = o.pts.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ") + (o.closed ? " Z" : "");
+      const d = o.pts.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ") + (o.closed ? " Z" : "") + holesD(o);
       const n = o.pts.length;
       return (
         <g data-id={o.id}>
-          <path d={d} {...strokeProps(o.style, z)} />
+          <path d={d} {...strokeProps(o.style, z)} fillRule={o.holes?.length ? "evenodd" : undefined} />
           {!o.closed && o.style.stroke && o.style.arrowEnd && n >= 2 && <ArrowTip tip={o.pts[n - 1]} from={o.pts[n - 2]} st={o.style} z={z} />}
           {!o.closed && o.style.stroke && o.style.arrowStart && n >= 2 && <ArrowTip tip={o.pts[0]} from={o.pts[1]} st={o.style} z={z} />}
           <MidMarks o={o} st={o.style} z={z} />
@@ -344,7 +349,7 @@ function PlainObjView({ o, z }: { o: Obj; z: number }) {
       };
       return (
         <g data-id={o.id}>
-          <path d={curvePathD(o)} {...strokeProps(o.style, z)} />
+          <path d={curvePathD(o) + holesD(o)} {...strokeProps(o.style, z)} fillRule={o.holes?.length ? "evenodd" : undefined} />
           {!closed && last && o.style.stroke && o.style.arrowEnd && <ArrowTip tip={last.b} from={tipFrom(last, true)} st={o.style} z={z} />}
           {!closed && first && o.style.stroke && o.style.arrowStart && <ArrowTip tip={first.a} from={tipFrom(first, false)} st={o.style} z={z} />}
           <MidMarks o={o} st={o.style} z={z} />

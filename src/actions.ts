@@ -13,6 +13,7 @@ import { labelBox } from "./labels/render";
 import { followRef } from "./smartLabels";
 import { freshCopies, nextNumbered } from "./model/copies";
 import { withAttached } from "./model/attach";
+import { cross, crossable, showsHeight } from "./model/height";
 
 export function setTool(tool: ToolName) {
   cancelDraft();
@@ -33,9 +34,16 @@ export function applyStyle(patch: Partial<Style>, extra: Partial<Obj> = {}) {
   }
   // Labels have no fill; their colour shouldn't turn the next shape's fill off.
   const forNew = sel.length > 0 && sel.every((o) => o.type === "label") ? { stroke: patch.stroke ?? s.style.stroke } : patch;
-  store.set({ style: { ...s.style, ...(sel.length ? forNew : patch) } });
+  // Line patterns are one choice: a dash takes the wave off (not a brace's).
+  if (patch.dash && !("wave" in patch)) patch = { ...patch, wave: undefined };
+  const forStyle = { ...(sel.length ? forNew : patch) };
+  if (forStyle.wave === "brace") delete forStyle.wave;
+  store.set({ style: { ...s.style, ...forStyle } });
   if (sel.length === 0) return;
-  const changed = sel.map((o) => ({ ...o, ...extra, style: { ...o.style, ...patch } }) as Obj);
+  const changed = sel.map((o) => {
+    const p = o.style.wave === "brace" && "wave" in patch ? (({ wave: _, ...r }) => r)(patch) : patch;
+    return { ...o, ...extra, style: { ...o.style, ...p } } as Obj;
+  });
   store.commit(store.withReplaced(changed));
 }
 
@@ -53,10 +61,22 @@ export function applyProps(patch: Partial<Obj>, filter: (o: Obj) => boolean) {
   store.commit(store.withReplaced(sel.map((o) => ({ ...o, ...patch }) as Obj)));
 }
 
+/** The objects plus the labels that label them (⇧T labels go with their
+ *  object: deleted, copied and duplicated with it). */
+export function withTheirLabels(ids: string[], objects: Obj[] = store.get().scene.objects): string[] {
+  const set = new Set(ids);
+  const extra = objects.filter((o) => {
+    if (o.type !== "label" || set.has(o.id)) return false;
+    const of = o.follow && !o.follow.off ? o.follow.ids : o.attach;
+    return !!of?.length && of.every((i) => set.has(i));
+  });
+  return extra.length ? [...ids, ...extra.map((o) => o.id)] : ids;
+}
+
 export function deleteSelection() {
   const s = store.get();
   if (s.selection.length === 0) return;
-  const sel = new Set(s.selection);
+  const sel = new Set(withTheirLabels(s.selection));
   store.commit({ ...s.scene, objects: s.scene.objects.filter((o) => !sel.has(o.id)) }, { selection: [], editingLabel: null, pointEdit: null });
 }
 
@@ -66,7 +86,13 @@ export function selectAll() {
 
 let clipboard: Obj[] = [];
 export function copy() {
-  clipboard = store.selected();
+  clipboard = selectedWithLabels();
+}
+
+/** The selection with its objects' labels, in scene order. */
+function selectedWithLabels(): Obj[] {
+  const ids = new Set(withTheirLabels(store.get().selection));
+  return store.get().scene.objects.filter((o) => ids.has(o.id));
 }
 
 /** About 20 screen px, in whole grid steps (or halves of one when zoomed in). */
@@ -111,7 +137,7 @@ let lastDup: { src: string[]; copies: string[] } | null = null;
 /** ⌘D. Duplicating the copy you just made (after moving it) repeats that
  *  move: ⌘D, drag the copy into place, then ⌘D ⌘D … gives evenly spaced copies. */
 export function duplicate() {
-  const sel = store.selected();
+  const sel = selectedWithLabels();
   if (!sel.length) return;
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
   if (lastDup && same(sel.map((o) => o.id), lastDup.copies)) {
@@ -419,4 +445,37 @@ export async function setSnapKind(k: keyof Settings["snapKinds"] | "grid", on: b
   const st = store.get().settings;
   if (k === "grid") return saveSettings({ ...st, snapToGrid: on });
   await saveSettings({ ...st, snapToObjects: on ? true : st.snapToObjects, snapKinds: { ...st.snapKinds, [k]: on } });
+}
+
+/** The pairs of selected lines that cross (for "Show height"). */
+export function heightPairs(): [Obj, Obj][] {
+  const sel = store.selected().filter(crossable);
+  const out: [Obj, Obj][] = [];
+  for (let i = 0; i < sel.length; i++) for (let j = i + 1; j < sel.length; j++) if (cross(sel[i], sel[j])) out.push([sel[i], sel[j]]);
+  return out;
+}
+
+/** Right-click → Show height: where the selected lines cross, the one in
+ *  front goes over the other (a gap in the one behind). Again: off. */
+export function toggleHeight() {
+  const pairs = heightPairs();
+  if (!pairs.length) return store.flash("Select two lines that cross");
+  const on = !pairs.every(([a, b]) => showsHeight(a, b));
+  const cr = new Map<string, Set<string>>();
+  const of = (o: Obj) => cr.get(o.id) ?? cr.set(o.id, new Set(o.cross ?? [])).get(o.id)!;
+  for (const [a, b] of pairs) {
+    if (on) {
+      of(a).add(b.id);
+      of(b).add(a.id);
+    } else {
+      of(a).delete(b.id);
+      of(b).delete(a.id);
+    }
+  }
+  const changed = store.get().scene.objects.filter((o) => cr.has(o.id)).map((o) => {
+    const ids = [...cr.get(o.id)!];
+    return { ...o, cross: ids.length ? ids : undefined } as Obj;
+  });
+  store.commit(store.withReplaced(changed));
+  store.flash(on ? "The line in front goes over (⌘] / ⌘[ swap them)" : "Height not shown");
 }

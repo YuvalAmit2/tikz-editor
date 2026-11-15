@@ -4,7 +4,6 @@
 // contours, and the like.
 import { sampleCurve } from "./curve";
 import { ellipsePoint } from "./geometry";
-import { waved } from "./wave";
 import type { Obj, Vec } from "./types";
 
 export interface Mark {
@@ -91,18 +90,4 @@ export function marksTikz(o: Obj, fmt: (n: number) => string): string | null {
   const c = (p: Vec) => `(${fmt(p.x)},${fmt(p.y)})`;
   const lines = marksOf(o).map(({ p, dir }) => `\\path[${opts.join(",")}] ${c({ x: p.x - dir.x * 0.05, y: p.y - dir.y * 0.05 })} -- ${c(p)};`);
   return lines.length ? lines.join("\n") : null;
-}
-
-/** The white line under an object with style.gap (wider by 2pt each side),
- *  or null. */
-export function halo(o: Obj): Obj | null {
-  if (!o.style.gap || !o.style.stroke || (o.type !== "path" && o.type !== "curve" && o.type !== "ellipse")) return null;
-  // Under a wave, the wave's own line.
-  const base = waved(o) ?? o;
-  return {
-    ...base,
-    parts: undefined,
-    text: undefined,
-    style: { stroke: "white", width: o.style.width + 4, dash: "solid", fill: null, arrowStart: false, arrowEnd: false },
-  } as Obj;
 }

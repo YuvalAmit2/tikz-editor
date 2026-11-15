@@ -13,6 +13,12 @@ export function freshCopies(objs: Obj[], m: Affine): Obj[] {
   return objs.map((o) => {
     const c = { ...transformObj(o, m), id: ids.get(o.id)! } as Obj;
     if (o.group) c.group = groups.get(o.group);
+    // "Show height" with objects copied along goes to their copies.
+    if (c.cross) {
+      const cr = c.cross.filter((i) => ids.has(i)).map((i) => ids.get(i)!);
+      if (cr.length) c.cross = cr;
+      else delete c.cross;
+    }
     if (c.type === "label") {
       const remap = (list: string[] | undefined) => (list && list.length && list.every((i) => ids.has(i)) ? list.map((i) => ids.get(i)!) : undefined);
       const attach = remap(c.attach);

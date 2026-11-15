@@ -22,9 +22,6 @@ export interface Style {
   /** Arrowheads in the middle of each straight edge (or halfway along a
    *  curve or ellipse): 1 or 2 of them, negative pointing backwards. */
   mid?: number;
-  /** Breaks the lines it crosses that are below it (knots, braids, surfaces):
-   *  drawn over a wider white line. */
-  gap?: boolean;
   /** Drawn as a wave, zigzag or coil along the line, or as a curly brace
    *  (see model/wave.ts). */
   wave?: "snake" | "zigzag" | "coil" | "brace";
@@ -106,6 +103,9 @@ interface Base {
   hidden?: boolean;
   /** Objects with the same group id are selected and moved together. */
   group?: string;
+  /** "Show height" (model/height.ts): objects whose crossings with this one
+   *  show which is on top (the one drawn later goes over). */
+  cross?: string[];
 }
 
 export interface PartStyle {
@@ -118,6 +118,8 @@ export interface PathObj extends Base {
   type: "path";
   pts: Vec[];
   closed: boolean;
+  /** Holes in the fill (a filled ring, a disc with punctures). */
+  holes?: (PathObj | CurveObj)[];
 }
 
 /** Ellipse (circle when rx = ry), rotated by `rot` degrees about its centre. */
@@ -173,6 +175,8 @@ export interface CurveObj extends Base {
   type: "curve";
   nodes: CurveNode[];
   closed: boolean;
+  /** Holes in the fill (see PathObj). */
+  holes?: (PathObj | CurveObj)[];
   /** Text written along the curve instead of a line (TikZ "text along path"). */
   text?: string;
   textFont?: FontSize;

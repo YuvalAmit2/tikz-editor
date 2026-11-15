@@ -5,7 +5,8 @@ import { geomBox } from "../model/geometry";
 import { toChain } from "../model/trim";
 import { saveSelectionToLibrary } from "../library";
 import { useState } from "react";
-import { FONT_SIZES, LINE_WIDTHS, PATTERNS, type Obj, type Pattern, type Style } from "../model/types";
+import { FONT_SIZES, LINE_WIDTHS, PATTERNS, type Dash, type Obj, type Pattern, type Style } from "../model/types";
+import { WAVES } from "../model/wave";
 import { componentAt, componentPieces, components, componentStyles, piecesSvgD } from "../model/parts";
 import { PALETTE, TINTS, isCustomColor, splitTint, xcolorCss } from "../model/xcolor";
 import { askText, store, useStore } from "../store";
@@ -213,36 +214,8 @@ export function StylePanel() {
             </div>
           </section>
           <section>
-            <h4>Dash</h4>
-            <Seg
-              value={st.dash}
-              onPick={(dash) => applyStyle({ dash })}
-              options={[
-                { v: "solid", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" /></svg>, title: "solid (_)", k: "_" },
-                { v: "dashed", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="5 4" /></svg>, title: "dashed (-)", k: "-" },
-                { v: "dotted", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="1.5 3" strokeLinecap="round" /></svg>, title: "dotted (.)", k: "." },
-              ]}
-            />
-            {hasLine && !pieceMode && !onlyLabels && !onlyPoints && (
-              <>
-                <Seg
-                  value={st.wave ?? ""}
-                onPick={(w) => applyStyle({ wave: (w || undefined) as Style["wave"] })}
-                testid="wave"
-                options={[
-                  { v: "", label: <svg width="26" height="10" viewBox="0 0 34 10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" /></svg>, title: "Straight" },
-                  { v: "snake", label: <svg width="26" height="10" viewBox="0 0 34 10"><path d="M2 5q2.5-5 5 0t5 0 5 0 5 0 5 0 5 0" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>, title: "Wavy (photon lines, branch cuts)" },
-                  { v: "zigzag", label: <svg width="26" height="10" viewBox="0 0 34 10"><path d="M2 5l2.5-3.5 5 7 5-7 5 7 5-7 5 7 2.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>, title: "Zigzag (branch cuts, springs)" },
-                  { v: "coil", label: <svg width="26" height="10" viewBox="0 0 34 10"><path d="M2 5c3-6 7-6 4 0s1 6 4 0 7-6 4 0 1 6 4 0 7-6 4 0 1 6 4 0" fill="none" stroke="currentColor" strokeWidth="1.1" /></svg>, title: "Coil (gluons, springs)" },
-                  { v: "brace", label: <svg width="26" height="10" viewBox="0 0 34 10"><path d="M3 9q0-3 3-3h8q3 0 3-4q0 4 3 4h8q3 0 3 3" fill="none" stroke="currentColor" strokeWidth="1.2" /></svg>, title: "Curly brace, from the first point to the last, on the left going along the line (flip it for the other side)" },
-                ]}
-              />
-                <label className="check-row" title="Drawn over a wider white line, so lines below it are broken where it crosses them (knots, braids, a curve passing in front). ⌘] brings it to the front.">
-                  <input type="checkbox" checked={!!st.gap} onChange={(e) => applyStyle({ gap: e.target.checked || undefined })} data-testid="gap-toggle" />
-                  <span>Gap where it crosses lines below</span>
-                </label>
-              </>
-            )}
+            <h4>Line</h4>
+            <LinePatterns st={st} waves={hasLine && !pieceMode && !objs.every((o) => o.style.wave === "brace")} />
           </section>
         </>
       )}
@@ -276,34 +249,31 @@ export function StylePanel() {
         </section>
       )}
 
-      {hasOpen && !onlyLabels && !onlyPoints && !pieceMode && (
-        <section>
-          <h4>Arrowheads</h4>
-          <Seg
-            value={`${st.arrowStart ? "<" : ""}-${st.arrowEnd ? ">" : ""}`}
-            onPick={(v) => applyStyle({ arrowStart: v.startsWith("<"), arrowEnd: v.endsWith(">") })}
-            options={[
-              { v: "-", label: "—" },
-              { v: "->", label: "→" },
-              { v: "<-", label: "←" },
-              { v: "<->", label: "↔" },
-            ]}
-          />
-        </section>
-      )}
-
       {hasLine && !onlyLabels && !onlyPoints && !pieceMode && (
         <section>
-          <h4>Arrows in the middle</h4>
+          <h4>Arrows</h4>
+          {hasOpen && (
+            <Seg
+              value={`${st.arrowStart ? "<" : ""}-${st.arrowEnd ? ">" : ""}`}
+              onPick={(v) => applyStyle({ arrowStart: v.startsWith("<"), arrowEnd: v.endsWith(">") })}
+              testid="ends"
+              options={[
+                { v: "-", label: <ArrowIcon />, title: "No arrowheads" },
+                { v: "->", label: <ArrowIcon end />, title: "At the end" },
+                { v: "<-", label: <ArrowIcon start />, title: "At the start" },
+                { v: "<->", label: <ArrowIcon start end />, title: "At both ends" },
+              ]}
+            />
+          )}
           <Seg
             value={st.mid ?? 0}
             onPick={(mid) => applyStyle({ mid: mid || undefined })}
             options={[
-              { v: 0, label: "—", title: "None" },
-              { v: 1, label: "›", title: "One, along the line (each straight edge gets one)" },
-              { v: 2, label: "»", title: "Two, along the line" },
-              { v: -1, label: "‹", title: "One, pointing back" },
-              { v: -2, label: "«", title: "Two, pointing back" },
+              { v: 0, label: <ArrowIcon />, title: "None in the middle" },
+              { v: 1, label: <ArrowIcon mid={1} />, title: "One in the middle (of each straight edge)" },
+              { v: 2, label: <ArrowIcon mid={2} />, title: "Two in the middle" },
+              { v: -1, label: <ArrowIcon mid={-1} />, title: "One in the middle, pointing back" },
+              { v: -2, label: <ArrowIcon mid={-2} />, title: "Two in the middle, pointing back" },
             ]}
             testid="mid"
           />
@@ -556,5 +526,46 @@ function PatternIcon({ p }: { p: Pattern | null }) {
       {p === "crosshatch" && L("M1 6H17M1 12H17M6 1V17M12 1V17")}
       {p === "dots" && [5, 9, 13].flatMap((x) => [5, 9, 13].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1" fill="currentColor" />))}
     </svg>
+  );
+}
+
+/** A short line with arrowheads at its ends or in its middle (n heads,
+ *  negative pointing back). */
+function ArrowIcon({ start, end, mid }: { start?: boolean; end?: boolean; mid?: number }) {
+  const head = (x: number, dir: 1 | -1, key: string | number) => <path key={key} d={`M${x - 3.5 * dir} 2L${x} 5L${x - 3.5 * dir} 8`} fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />;
+  const n = Math.abs(mid ?? 0);
+  const dir = (mid ?? 0) < 0 ? -1 : 1;
+  const heads = Array.from({ length: n }, (_, k) => head(15 + dir * 2 + (k - (n - 1) / 2) * 4 * dir, dir as 1 | -1, k));
+  return (
+    <svg width="28" height="10" viewBox="0 0 30 10">
+      <line x1={start ? 3 : 2} x2={end ? 27 : 28} y1="5" y2="5" stroke="currentColor" strokeWidth="1.3" />
+      {end && head(28, 1, "e")}
+      {start && head(2, -1, "s")}
+      {heads}
+    </svg>
+  );
+}
+
+const WAVE_ICONS: Record<"snake" | "zigzag" | "coil", React.ReactNode> = {
+  snake: <path d="M2 5q2.5-5 5 0t5 0 5 0 5 0 5 0 5 0" fill="none" stroke="currentColor" strokeWidth="1.3" />,
+  zigzag: <path d="M2 5l2.5-3.5 5 7 5-7 5 7 5-7 5 7 2.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />,
+  coil: <path d="M2 5c3-6 7-6 4 0s1 6 4 0 7-6 4 0 1 6 4 0 7-6 4 0 1 6 4 0" fill="none" stroke="currentColor" strokeWidth="1.1" />,
+};
+
+/** Solid, dashed, dotted, wavy, zigzag, coil: one choice. */
+function LinePatterns({ st, waves }: { st: Style; waves: boolean }) {
+  const cur = st.wave && st.wave !== "brace" ? st.wave : st.dash;
+  const line = (dash?: string) => <svg width="24" height="10" viewBox="0 0 34 10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.6" strokeDasharray={dash} strokeLinecap={dash === "1.5 4" ? "round" : undefined} /></svg>;
+  type V = Dash | "snake" | "zigzag" | "coil";
+  const options: { v: V; label: React.ReactNode; title: string; k?: string }[] = [
+    { v: "solid", label: line(), title: "Solid (_)", k: "_" },
+    { v: "dashed", label: line("5 4"), title: "Dashed (-)", k: "-" },
+    { v: "dotted", label: line("1.5 4"), title: "Dotted (.)", k: "." },
+  ];
+  if (waves) for (const w of WAVES) if (w.w !== "brace") options.push({ v: w.w, label: <svg width="24" height="10" viewBox="0 0 34 10">{WAVE_ICONS[w.w]}</svg>, title: w.name });
+  return (
+    <div className="line-patterns">
+      <Seg<V> value={cur} testid="line" onPick={(v) => applyStyle(v === "solid" || v === "dashed" || v === "dotted" ? { dash: v } : { dash: "solid", wave: v })} options={options} />
+    </div>
   );
 }

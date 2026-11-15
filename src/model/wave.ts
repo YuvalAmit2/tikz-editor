@@ -88,6 +88,24 @@ export function waved(o: Obj): PathObj | null {
   return { id: o.id, type: "path", style, pts: out, closed: base.closed, ...(o.hidden ? { hidden: true } : {}) };
 }
 
+/** The tip of a brace (its cusp) and the way it points (unit vector). */
+export function braceTip(o: Obj): { tip: Vec; n: Vec } | null {
+  if (o.style.wave !== "brace") return null;
+  const base = baseLine(o);
+  if (!base) return null;
+  const a = base.pts[0];
+  const b = base.pts[base.pts.length - 1];
+  const l = Math.hypot(b.x - a.x, b.y - a.y);
+  if (l < 1e-9) return null;
+  const t = { x: (b.x - a.x) / l, y: (b.y - a.y) / l };
+  const n = { x: -t.y, y: t.x };
+  const h = braceHalf(o, l);
+  return { tip: { x: (a.x + b.x) / 2 + n.x * 2 * h, y: (a.y + b.y) / 2 + n.y * 2 * h }, n };
+}
+
+/** Half a brace's height; smaller braces on short lines. */
+const braceHalf = (o: Obj, l: number) => Math.min(ptToCm(2.5) * (1 + Math.max(0, o.style.width - 0.4) * 0.6), l / 6);
+
 /** A curly brace from the line's first point to its last, on its left
  *  (draw it the other way, or flip it, for the other side). */
 function brace(o: Obj, a: Vec, b: Vec): PathObj | null {
@@ -95,8 +113,7 @@ function brace(o: Obj, a: Vec, b: Vec): PathObj | null {
   if (l < 1e-9) return null;
   const t = { x: (b.x - a.x) / l, y: (b.y - a.y) / l };
   const n = { x: -t.y, y: t.x };
-  // Half the brace's height; smaller braces on short lines.
-  const h = Math.min(ptToCm(2.5) * (1 + Math.max(0, o.style.width - 0.4) * 0.6), l / 6);
+  const h = braceHalf(o, l);
   const loc: Vec[] = [];
   const arc = (cx: number, cy: number, a0: number, a1: number) => {
     for (let k = 0; k <= 8; k++) {

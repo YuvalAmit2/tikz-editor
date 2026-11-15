@@ -61,16 +61,6 @@ describe("copies", () => {
   });
 });
 
-describe("gap where it crosses", () => {
-  it("draws a wider white line first", () => {
-    const o: Obj = { ...line(0), style: { ...DEFAULT_STYLE, gap: true } };
-    const t = sceneToTikz({ version: 1, objects: [o] });
-    const white = t.indexOf("\\path[draw=white,line width=4.4pt] (0,0) -- (2,0) -- (2,2);");
-    expect(white).toBeGreaterThan(0);
-    expect(t.indexOf("\\path[draw] (0,0) -- (2,0) -- (2,2);")).toBeGreaterThan(white);
-  });
-});
-
 describe("lines follow their dots", () => {
   it("moves line ends and curve anchors that were on a moved dot", () => {
     const d: Obj = { id: "d", type: "point", style: DEFAULT_STYLE, p: { x: 2, y: 0 }, size: 1.5 };

@@ -63,10 +63,14 @@ describe("trim", () => {
 
   it("opens a rectangle at a side cut by a line", () => {
     const rect: PathObj = { id: "r", type: "path", style: st, closed: true, pts: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 2 }, { x: 0, y: 2 }] };
+    // Round 8: the corners cut too, so only the right side goes.
     const r = trimAt(rect, { x: 4, y: 1 }, [line("l", [2, -1], [2, 3])])!;
     const k = r.kept[0] as PathObj;
     expect(k.closed).toBe(false);
-    expect(k.pts).toEqual([{ x: 2, y: 2 }, { x: 0, y: 2 }, { x: 0, y: 0 }, { x: 2, y: 0 }]);
+    expect(k.pts).toEqual([{ x: 4, y: 2 }, { x: 0, y: 2 }, { x: 0, y: 0 }, { x: 4, y: 0 }]);
+    // Between the line and a corner: just that stretch.
+    const r2 = trimAt(rect, { x: 3, y: 2 }, [line("l", [2, -1], [2, 3])])!;
+    expect((r2.kept[0] as PathObj).pts[0]).toEqual({ x: 2, y: 2 });
   });
 
   it("ellipse chain matches the ellipse closely", () => {

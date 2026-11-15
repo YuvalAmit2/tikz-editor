@@ -115,6 +115,12 @@ export function normDeg(d: number): number {
 }
 
 export function transformObj(o: Obj, m: Affine): Obj {
+  const r = transformOne(o, m);
+  if ((r.type === "path" || r.type === "curve") && r.holes) return { ...r, holes: r.holes.map((h) => transformOne(h, m) as typeof h) };
+  return r;
+}
+
+function transformOne(o: Obj, m: Affine): Obj {
   // A mirror image of a brace or wave should bulge to the mirrored side, which
   // is the other side of the line: reverse the line.
   if (o.style.wave && !o.parts?.length && m.a * m.d - m.b * m.c < 0) {

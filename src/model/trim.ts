@@ -133,9 +133,40 @@ export function cutters(objs: Obj[]): Vec[][] {
 
 const STEPS = 64;
 
+export interface Chunk {
+  poly: Vec[];
+  j0: number;
+  j1: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** Polylines in runs of a few segments, each with its box (so segments far
+ *  from a point or segment are skipped quickly). */
+export function chunks(cut: Vec[][], grow = 0): Chunk[] {
+  const out: Chunk[] = [];
+  for (const poly of cut)
+    for (let j0 = 0; j0 + 1 < poly.length; j0 += 8) {
+      const j1 = Math.min(poly.length - 1, j0 + 8);
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (let j = j0; j <= j1; j++) {
+        const v = poly[j];
+        if (v.x < x0) x0 = v.x;
+        if (v.y < y0) y0 = v.y;
+        if (v.x > x1) x1 = v.x;
+        if (v.y > y1) y1 = v.y;
+      }
+      out.push({ poly, j0, j1, x0: x0 - grow, y0: y0 - grow, x1: x1 + grow, y1: y1 + grow });
+    }
+  return out;
+}
+
 /** Chain parameters where the chain crosses the cutters (sorted). */
 export function crossings(c: Chain, cut: Vec[][]): number[] {
   const out: number[] = [];
+  const ch = chunks(cut, 1e-9);
   c.pieces.forEach((p, i) => {
     const steps = p.line ? 1 : STEPS;
     for (let k = 0; k < steps; k++) {
@@ -143,14 +174,21 @@ export function crossings(c: Chain, cut: Vec[][]): number[] {
       const t1 = (k + 1) / steps;
       const a = pieceAt(p, t0);
       const b = pieceAt(p, t1);
-      for (const poly of cut)
-        for (let j = 0; j + 1 < poly.length; j++) {
+      const bx0 = Math.min(a.x, b.x);
+      const bx1 = Math.max(a.x, b.x);
+      const by0 = Math.min(a.y, b.y);
+      const by1 = Math.max(a.y, b.y);
+      for (const q of ch) {
+        if (q.x1 < bx0 || q.x0 > bx1 || q.y1 < by0 || q.y0 > by1) continue;
+        const poly = q.poly;
+        for (let j = q.j0; j < q.j1; j++) {
           const x = segIntersect(a, b, poly[j], poly[j + 1]);
           if (!x) continue;
           let t = t0 + (t1 - t0) * (dist(a, x) / (dist(a, b) || 1));
           if (!p.line) t = refine(p, t0, t1, poly[j], poly[j + 1], t);
           out.push(i + t);
         }
+      }
     }
   });
   out.sort((x, y) => x - y);
@@ -212,7 +250,13 @@ export function trimAt(o: Obj, p: Vec, others: Obj[]): TrimResult | null {
   const c = toChain(o);
   if (!c) return null;
   const n = c.pieces.length;
-  const xs = crossings(c, cutters(others));
+  let xs = crossings(c, cutters(others));
+  // The sides of a rectangle, polygon or polyline are trimmed one at a time:
+  // its corners cut it too.
+  if (o.type === "path" && n > 1) {
+    const corners = Array.from({ length: c.closed ? n : n - 1 }, (_, k) => (c.closed ? k : k + 1));
+    xs = [...xs, ...corners].sort((a, b) => a - b).filter((x, k, a) => k === 0 || x - a[k - 1] > 1e-7);
+  }
   const s = nearestParam(c, p);
   if (!c.closed) {
     const inner = xs.filter((x) => x > 1e-6 && x < n - 1e-6);

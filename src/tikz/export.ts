@@ -8,10 +8,10 @@
 import { labelBody, labelNodeOpts } from "../labels/mode";
 import { sceneGeomBox, transformObj, translation } from "../model/geometry";
 import { curveSegments } from "../model/curve";
-import { styledRuns } from "../model/parts";
+import { strokeRuns } from "../model/height";
 import type { Obj, Pattern, Scene, Style } from "../model/types";
 import { patternLook } from "../model/xcolor";
-import { halo, marksTikz } from "../model/marks";
+import { marksTikz } from "../model/marks";
 import { waved } from "../model/wave";
 
 export const SCENE_MARKER = "%tikz-editor-scene ";
@@ -57,17 +57,18 @@ export function patternOpts(p: Pattern, fill: string): string[] {
   return [`pattern={${meta[p]}}`, ...col];
 }
 
-/** An object with styled pieces: its fill, then one \path per stretch. */
+/** An object drawn in stretches (styled pieces, gaps where something goes
+ *  over it): its fill, then one \path per stretch. */
 function partedToTikz(o: Obj, others: Obj[]): string | null {
-  const runs = styledRuns(o, others);
-  if (!runs) return null;
+  const sr = strokeRuns(o, others);
+  if (!sr) return null;
   const lines: string[] = [];
-  if (o.style.fill) {
-    const fillOnly = objToTikz({ ...o, parts: undefined, style: { ...o.style, stroke: null } } as Obj, others);
+  if (sr.fill) {
+    const fillOnly = plainToTikz(sr.fill);
     if (fillOnly) lines.push(fillOnly);
   }
-  for (const r of runs) {
-    const st = { ...r.style, fill: null, arrowStart: r.first && o.style.arrowStart, arrowEnd: r.last && o.style.arrowEnd };
+  for (const r of sr.runs) {
+    const st = { ...r.style, fill: null, arrowStart: r.first && sr.arrowStart, arrowEnd: r.last && sr.arrowEnd };
     const opts = styleOpts(st, { arrows: true });
     if (!opts.length || !r.pieces.length) continue;
     let body = coord(r.pieces[0].a);
@@ -79,7 +80,6 @@ function partedToTikz(o: Obj, others: Obj[]): string | null {
   return lines.join("\n") || null;
 }
 
-
 function objToTikz(o: Obj, others: Obj[] = []): string | null {
   if (o.type === "curve" && o.text) {
     // The line (unless hidden), then the text along it.
@@ -88,9 +88,7 @@ function objToTikz(o: Obj, others: Obj[] = []): string | null {
     return [line, text].filter(Boolean).join("\n") || null;
   }
   if (o.hidden) return null;
-  const h = halo(o);
-  if (h) return [plainToTikz(h), objToTikz({ ...o, style: { ...o.style, gap: undefined } } as Obj, others)].filter(Boolean).join("\n") || null;
-  if (o.parts?.length && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) {
+  if ((o.parts?.length || o.cross?.length) && (o.type === "path" || o.type === "curve" || o.type === "ellipse")) {
     const t = partedToTikz(o, others);
     if (t !== null) return t;
   }
@@ -115,13 +113,29 @@ function curveTextTikz(o: Extract<Obj, { type: "curve" }>): string | null {
   }
 }
 
+/** Holes of a filled shape: more closed pieces of the same path (filled
+ *  with the even odd rule). */
+function holesTikz(o: { holes?: Obj[] }): string {
+  let out = "";
+  for (const h of o.holes ?? []) {
+    if (h.type === "path" && h.pts.length >= 2) out += " " + h.pts.map(coord).join(" -- ") + " -- cycle";
+    else if (h.type === "curve") {
+      const segs = curveSegments(h);
+      if (!segs.length) continue;
+      out += " " + coord(segs[0].a) + segs.map((s, i) => ` .. controls ${coord(s.c1)} and ${coord(s.c2)} .. ${i === segs.length - 1 ? "cycle" : coord(s.b)}`).join("");
+    }
+  }
+  return out;
+}
+
 function plainToTikz(o: Obj): string | null {
   switch (o.type) {
     case "path": {
       if (o.pts.length < 2) return null;
       const opts = styleOpts(o.style, { arrows: !o.closed });
       if (opts.length === 0) return null;
-      const body = o.pts.map(coord).join(" -- ") + (o.closed ? " -- cycle" : "");
+      const body = o.pts.map(coord).join(" -- ") + (o.closed ? " -- cycle" : "") + holesTikz(o);
+      if (o.holes?.length) opts.push("even odd rule");
       return `\\path[${opts.join(",")}] ${body};`;
     }
     case "curve": {
@@ -135,6 +149,8 @@ function plainToTikz(o: Obj): string | null {
         const last = closed && i === segs.length - 1;
         body += ` .. controls ${coord(s.c1)} and ${coord(s.c2)} .. ${last ? "cycle" : coord(s.b)}`;
       });
+      body += holesTikz(o);
+      if (o.holes?.length) opts.push("even odd rule");
       return `\\path[${opts.join(",")}] ${body};`;
     }
     case "ellipse": {

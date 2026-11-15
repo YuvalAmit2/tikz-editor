@@ -1,6 +1,7 @@
 // Right-click menu for the selection.
 import { useEffect } from "react";
-import { copy, deleteSelection, duplicate, flipH, flipV, groupSelection, reorder, smartLabel, toggleHidden, ungroupSelection } from "../actions";
+import { copy, deleteSelection, duplicate, flipH, flipV, groupSelection, heightPairs, reorder, smartLabel, toggleHeight, toggleHidden, ungroupSelection } from "../actions";
+import { showsHeight } from "../model/height";
 import { saveSelectionToLibrary } from "../library";
 import { store, useStore } from "../store";
 
@@ -44,12 +45,15 @@ export function ContextMenu() {
   const hidden = objs.every((o) => o.hidden);
   const textCurve = objs.length === 1 && objs[0].type === "curve" && !!objs[0].text;
   const grouped = objs.some((o) => o.group);
+  const pairs = objs.length > 1 ? heightPairs() : [];
+  const heightOn = pairs.length > 0 && pairs.every(([a, b]) => showsHeight(a, b));
   return (
     <div className="context-menu" style={{ left: Math.min(menu.x, window.innerWidth - 200), top: Math.min(menu.y, window.innerHeight - 300) }} data-testid="context-menu" onContextMenu={(e) => e.preventDefault()}>
       {item("Bring to front", "⌘]", () => reorder("front"), "menu-front")}
       {item("Bring forward", "", () => reorder("forward"), "menu-forward")}
       {item("Send backward", "", () => reorder("backward"), "menu-backward")}
       {item("Send to back", "⌘[", () => reorder("back"), "menu-back")}
+      {pairs.length > 0 && item("Show height", heightOn ? "✓" : "", toggleHeight, "menu-height")}
       <div className="sep" />
       {!labels && item("Add label", "⇧T", smartLabel)}
       {item(hidden ? (textCurve ? "Show the line" : "Show") : textCurve ? "Hide the line" : "Hide", "⇧⌘H", toggleHidden, "menu-hide")}

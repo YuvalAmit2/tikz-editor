@@ -3,6 +3,7 @@
 import { dist, ellipsePoint, geomBox, pathSegments, unionBox, type Box } from "./geometry";
 import { sampleCurve } from "./curve";
 import type { Anchor, LabelObj, Obj, Vec } from "./types";
+import { braceTip } from "./wave";
 
 interface Candidate {
   p: Vec;
@@ -221,6 +222,9 @@ export function placeLabel(
 ): { p: Vec; anchor: Anchor } {
   // Between the text's box (which has 1pt of padding) and the line: about 1 mm in all.
   const gap = 0.07;
+  // A brace's label goes at its tip.
+  const brace = targets.length === 1 ? braceTip(targets[0]) : null;
+  if (brace) return { p: { x: brace.tip.x + brace.n.x * gap, y: brace.tip.y + brace.n.y * gap }, anchor: anchorFor(brace.n.x, brace.n.y) };
   const ign = new Set(ignore);
   const segs = strokes(scene.filter((o) => o.type !== "label" && !ign.has(o.id) && !o.hidden));
   const labels = scene.filter((o): o is LabelObj => o.type === "label" && !ign.has(o.id)).map(labelBoxOf).filter((b): b is Box => !!b);

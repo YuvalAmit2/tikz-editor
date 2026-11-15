@@ -67,6 +67,10 @@ export interface AppState {
   guides: Guide[];
   /** The snapping menu is open. */
   snapMenu: boolean;
+  /** What the Line tool draws (its menu: a line or a curly brace). */
+  lineKind: "line" | "brace";
+  /** The Line tool's menu is open. */
+  lineMenu: boolean;
 }
 
 type Listener = () => void;
@@ -102,6 +106,8 @@ class Store {
     menu: null,
     guides: [],
     snapMenu: false,
+    lineKind: "line",
+    lineMenu: false,
   };
   private listeners = new Set<Listener>();
   private undoStack: Scene[] = [];

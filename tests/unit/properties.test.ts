@@ -28,7 +28,6 @@ function randomStyle(): Style {
     mid: pick([0, 0, 0, 1, 2, -1]),
     wave: pick([undefined, undefined, undefined, "snake", "zigzag", "coil", "brace"] as const),
     opacity: pick([undefined, undefined, 0.5]),
-    gap: rnd() < 0.15,
   };
 }
 function randomNodes(n: number): CurveNode[] {
