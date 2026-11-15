@@ -25,8 +25,11 @@ export interface Style {
   /** Breaks the lines it crosses that are below it (knots, braids, surfaces):
    *  drawn over a wider white line. */
   gap?: boolean;
-  /** Drawn as a wave, zigzag or coil along the line (see model/wave.ts). */
-  wave?: "snake" | "zigzag" | "coil";
+  /** Drawn as a wave, zigzag or coil along the line, or as a curly brace
+   *  (see model/wave.ts). */
+  wave?: "snake" | "zigzag" | "coil" | "brace";
+  /** A see-through fill (TikZ fill opacity), 0–1. */
+  opacity?: number;
 }
 
 export type Pattern = "north east lines" | "north west lines" | "horizontal lines" | "vertical lines" | "crosshatch" | "dots";
@@ -152,6 +155,8 @@ export interface LabelObj extends Base {
    *  moves, the label moves too (ref: where it was), or with `avoid`, it's
    *  placed again so it stays clear of lines. */
   follow?: { ids: string[]; ref: Vec; avoid: boolean; off?: boolean };
+  /** A white box behind the text (so it can sit on a line). */
+  bg?: boolean;
 }
 
 /** An anchor of a smooth curve (see model/curve.ts). */

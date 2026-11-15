@@ -146,6 +146,7 @@ function strokeProps(st: Style, z: number) {
     strokeWidth: w,
     strokeDasharray: dash,
     fill: st.fill && st.pattern ? `url(#${patternId(st.pattern, st.fill)})` : xcolorCss(st.fill),
+    fillOpacity: st.fill && st.opacity !== undefined && st.opacity < 1 ? st.opacity : undefined,
     strokeMiterlimit: 10,
   };
 }
@@ -381,6 +382,7 @@ function LabelView({ o, z }: { o: Extract<Obj, { type: "label" }>; z: number }) 
     const url = labelImage(e, z);
     return (
       <g data-id={o.id} transform={`translate(${b.minX},${b.maxY}) scale(1,-1)`}>
+        {o.bg && <rect x={0} y={0} width={b.maxX - b.minX} height={b.maxY - b.minY} fill="white" />}
         {url && <image href={url} x={0} y={0} width={b.maxX - b.minX} height={b.maxY - b.minY} preserveAspectRatio="none" />}
       </g>
     );

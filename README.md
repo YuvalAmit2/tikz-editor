@@ -98,7 +98,9 @@ In the text panel: labels are **math by default** (`\cO_K`), but a label contain
 
 **Dots hold their lines:** moving a dot (dragging, arrow keys, flipping) moves the line ends, corners and curve points that were on it, so graphs and triangulations stay joined. ⌘-drag moves a dot alone.
 
-**Wavy, zigzag and coiled lines** (second row under Dash): for branch cuts, photon and gluon lines, springs. A whole number of waves fits the line so its ends stay put; they're written as coordinates, so the PDF looks exactly like the editor.
+**Wavy, zigzag and coiled lines, braces** (second row under Dash): for branch cuts, photon and gluon lines, springs; a curly brace goes from a line's first point to its last, on its left (flip it, ⇧H/⇧V, for the other side). A whole number of waves fits the line so its ends stay put; they're written as coordinates, so the PDF looks exactly like the editor.
+
+**See-through fills** (Fill, "See-through") let overlapping shapes show both colours, as in Venn diagrams. A label's **White background** lets it sit on a line.
 
 **Crossings** (knots, braids, a curve passing in front of a surface): tick "Gap where it crosses lines below" on the line that goes over; it's drawn over a wider white line, so the lines below it are broken where it crosses them. It must be in front (⌘]).
 

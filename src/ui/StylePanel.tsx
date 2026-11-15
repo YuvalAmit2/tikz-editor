@@ -229,10 +229,11 @@ export function StylePanel() {
                 onPick={(w) => applyStyle({ wave: (w || undefined) as Style["wave"] })}
                 testid="wave"
                 options={[
-                  { v: "", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" /></svg>, title: "Straight" },
-                  { v: "snake", label: <svg width="34" height="10"><path d="M2 5q2.5-5 5 0t5 0 5 0 5 0 5 0 5 0" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>, title: "Wavy (photon lines, branch cuts)" },
-                  { v: "zigzag", label: <svg width="34" height="10"><path d="M2 5l2.5-3.5 5 7 5-7 5 7 5-7 5 7 2.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>, title: "Zigzag (branch cuts, springs)" },
-                  { v: "coil", label: <svg width="34" height="10"><path d="M2 5c3-6 7-6 4 0s1 6 4 0 7-6 4 0 1 6 4 0 7-6 4 0 1 6 4 0" fill="none" stroke="currentColor" strokeWidth="1.1" /></svg>, title: "Coil (gluons, springs)" },
+                  { v: "", label: <svg width="26" height="10" viewBox="0 0 34 10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" /></svg>, title: "Straight" },
+                  { v: "snake", label: <svg width="26" height="10" viewBox="0 0 34 10"><path d="M2 5q2.5-5 5 0t5 0 5 0 5 0 5 0 5 0" fill="none" stroke="currentColor" strokeWidth="1.3" /></svg>, title: "Wavy (photon lines, branch cuts)" },
+                  { v: "zigzag", label: <svg width="26" height="10" viewBox="0 0 34 10"><path d="M2 5l2.5-3.5 5 7 5-7 5 7 5-7 5 7 2.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" /></svg>, title: "Zigzag (branch cuts, springs)" },
+                  { v: "coil", label: <svg width="26" height="10" viewBox="0 0 34 10"><path d="M2 5c3-6 7-6 4 0s1 6 4 0 7-6 4 0 1 6 4 0 7-6 4 0 1 6 4 0" fill="none" stroke="currentColor" strokeWidth="1.1" /></svg>, title: "Coil (gluons, springs)" },
+                  { v: "brace", label: <svg width="26" height="10" viewBox="0 0 34 10"><path d="M3 9q0-3 3-3h8q3 0 3-4q0 4 3 4h8q3 0 3 3" fill="none" stroke="currentColor" strokeWidth="1.2" /></svg>, title: "Curly brace, from the first point to the last, on the left going along the line (flip it for the other side)" },
                 ]}
               />
             )}
@@ -260,6 +261,12 @@ export function StylePanel() {
               </button>
             ))}
           </div>
+          {fillBase && (
+            <label className="check-row" title="Half see-through (TikZ fill opacity=0.5): overlapping shapes show both colours">
+              <input type="checkbox" checked={(st.opacity ?? 1) < 1} onChange={(e) => applyStyle({ opacity: e.target.checked ? 0.5 : undefined })} data-testid="see-through" />
+              <span>See-through</span>
+            </label>
+          )}
         </section>
       )}
 
@@ -320,6 +327,10 @@ export function StylePanel() {
               title: f || "\\normalsize (the document's size)",
             }))}
           />
+          <label className="check-row" title="A white box behind the text (TikZ fill=white), so it can sit on a line">
+            <input type="checkbox" checked={labels.every((l) => l.bg)} onChange={(e) => applyProps({ bg: e.target.checked || undefined } as Partial<Obj>, (o) => o.type === "label")} data-testid="label-bg" />
+            <span>White background</span>
+          </label>
         </section>
       )}
 

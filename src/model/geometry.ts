@@ -115,6 +115,12 @@ export function normDeg(d: number): number {
 }
 
 export function transformObj(o: Obj, m: Affine): Obj {
+  // A mirror image of a brace or wave should bulge to the mirrored side, which
+  // is the other side of the line: reverse the line.
+  if (o.style.wave && !o.parts?.length && m.a * m.d - m.b * m.c < 0) {
+    if (o.type === "path") o = { ...o, pts: [...o.pts].reverse() };
+    if (o.type === "curve") o = { ...o, nodes: [...o.nodes].reverse().map((n) => ({ ...n, ...(n.hin || n.hout ? { hin: n.hout, hout: n.hin } : {}) })) };
+  }
   switch (o.type) {
     case "path":
       return { ...o, pts: o.pts.map((p) => applyAffine(m, p)) };

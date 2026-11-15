@@ -6,12 +6,13 @@ import { sampleCurve } from "./curve";
 import { ellipsePoint, ptToCm } from "./geometry";
 import type { Obj, PathObj, Vec } from "./types";
 
-export type Wave = "snake" | "zigzag" | "coil";
+export type Wave = "snake" | "zigzag" | "coil" | "brace";
 
 export const WAVES: { w: Wave; name: string }[] = [
   { w: "snake", name: "Wavy" },
   { w: "zigzag", name: "Zigzag" },
   { w: "coil", name: "Coil" },
+  { w: "brace", name: "Brace" },
 ];
 
 /** Amplitude and length of one wave, in pt (TikZ's defaults). */
@@ -51,6 +52,7 @@ export function waved(o: Obj): PathObj | null {
   if (!w) return null;
   const base = baseLine(o);
   if (!base) return null;
+  if (w === "brace") return brace(o, base.pts[0], base.pts[base.pts.length - 1]);
   const { pts } = base;
   const acc = [0];
   for (let i = 1; i < pts.length; i++) acc.push(acc[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
@@ -84,4 +86,30 @@ export function waved(o: Obj): PathObj | null {
   if (base.closed) out.pop();
   const { wave: _, ...style } = o.style;
   return { id: o.id, type: "path", style, pts: out, closed: base.closed, ...(o.hidden ? { hidden: true } : {}) };
+}
+
+/** A curly brace from the line's first point to its last, on its left
+ *  (draw it the other way, or flip it, for the other side). */
+function brace(o: Obj, a: Vec, b: Vec): PathObj | null {
+  const l = Math.hypot(b.x - a.x, b.y - a.y);
+  if (l < 1e-9) return null;
+  const t = { x: (b.x - a.x) / l, y: (b.y - a.y) / l };
+  const n = { x: -t.y, y: t.x };
+  // Half the brace's height; smaller braces on short lines.
+  const h = Math.min(ptToCm(2.5) * (1 + Math.max(0, o.style.width - 0.4) * 0.6), l / 6);
+  const loc: Vec[] = [];
+  const arc = (cx: number, cy: number, a0: number, a1: number) => {
+    for (let k = 0; k <= 8; k++) {
+      const th = a0 + ((a1 - a0) * k) / 8;
+      loc.push({ x: cx + h * Math.cos(th), y: cy + h * Math.sin(th) });
+    }
+  };
+  const P = Math.PI;
+  arc(h, 0, P, P / 2); // up from the start
+  arc(l / 2 - h, 2 * h, -P / 2, 0); // up to the tip
+  arc(l / 2 + h, 2 * h, P, (3 * P) / 2); // down from the tip
+  arc(l - h, 0, P / 2, 0); // down to the end
+  const pts = loc.map((q) => ({ x: a.x + t.x * q.x + n.x * q.y, y: a.y + t.y * q.x + n.y * q.y }));
+  const { wave: _, ...style } = o.style;
+  return { id: o.id, type: "path", style: { ...style, fill: null, arrowStart: false, arrowEnd: false }, pts, closed: false, ...(o.hidden ? { hidden: true } : {}) };
 }

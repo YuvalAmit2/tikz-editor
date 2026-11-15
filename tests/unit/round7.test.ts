@@ -7,7 +7,7 @@ import { waved } from "../../src/model/wave";
 import { graphPieces, parseExpr } from "../../src/model/expr";
 import { sampleCurve } from "../../src/model/curve";
 import { parsePlot } from "../../src/insert";
-import { translation } from "../../src/model/geometry";
+import { scalingAbout, transformObj, translation } from "../../src/model/geometry";
 import { fmt, sceneToTikz } from "../../src/tikz/export";
 import { DEFAULT_STYLE, type Obj } from "../../src/model/types";
 
@@ -155,5 +155,21 @@ describe("wavy, zigzag and coiled lines", () => {
     const o: Obj = { id: "w", type: "path", style: { ...DEFAULT_STYLE, wave: "snake", arrowEnd: true }, pts: [{ x: 0, y: 0 }, { x: 3, y: 0 }], closed: false };
     const p = waved(o)!.pts;
     expect(p[p.length - 2].y).toBeCloseTo(0, 9);
+  });
+});
+
+describe("braces, see-through fills, label backgrounds", () => {
+  it("a brace bulges to the left of its line, and flipping moves it to the other side", () => {
+    const o: Obj = { id: "b", type: "path", style: { ...DEFAULT_STYLE, wave: "brace" }, pts: [{ x: 0, y: 0 }, { x: 3, y: 0 }], closed: false };
+    const top = Math.max(...waved(o)!.pts.map((p) => p.y));
+    expect(top).toBeGreaterThan(0.1);
+    const f = transformObj(o, scalingAbout({ x: 1.5, y: 0 }, 1, -1));
+    expect(Math.min(...waved(f)!.pts.map((p) => p.y))).toBeCloseTo(-top, 9);
+  });
+  it("TikZ options", () => {
+    const e: Obj = { id: "e", type: "ellipse", style: { ...DEFAULT_STYLE, fill: "red!60", opacity: 0.5 }, c: { x: 0, y: 0 }, rx: 1, ry: 1, rot: 0 };
+    expect(sceneToTikz({ version: 1, objects: [e] })).toContain("fill=red!60,fill opacity=0.5");
+    const l: Obj = { id: "l", type: "label", style: DEFAULT_STYLE, p: { x: 0, y: 0 }, text: "x", textMode: false, anchor: "center", font: "", bg: true };
+    expect(sceneToTikz({ version: 1, objects: [l] })).toContain("fill=white] at (0,0) {$x$}");
   });
 });

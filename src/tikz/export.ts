@@ -30,6 +30,7 @@ function styleOpts(s: Style, opts: { arrows: boolean }): string[] {
   if (s.stroke) o.push(s.stroke === "black" ? "draw" : `draw=${s.stroke}`);
   if (s.fill && s.pattern) o.push(...patternOpts(s.pattern, s.fill));
   else if (s.fill) o.push(`fill=${s.fill}`);
+  if (s.fill && s.opacity !== undefined && s.opacity < 1) o.push(`fill opacity=${fmt(s.opacity)}`);
   if (s.stroke) {
     if (Math.abs(s.width - 0.4) > 1e-9) o.push(`line width=${fmt(s.width)}pt`);
     if (s.dash !== "solid") o.push(s.dash);
@@ -150,7 +151,7 @@ function plainToTikz(o: Obj): string | null {
       const body = labelBody(o.text, o.textMode);
       if (!body) return null;
       const extra = labelNodeOpts(o);
-      const opts = [`anchor=${o.anchor}`, "outer sep=0pt", "align=center", ...(extra ? [extra] : [])];
+      const opts = [`anchor=${o.anchor}`, "outer sep=0pt", "align=center", ...(extra ? [extra] : []), ...(o.bg ? ["fill=white"] : [])];
       return `\\node[${opts.join(",")}] at ${coord(o.p)} {${body}};`;
     }
   }
