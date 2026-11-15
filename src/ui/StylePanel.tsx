@@ -7,20 +7,9 @@ import { saveSelectionToLibrary } from "../library";
 import { useState } from "react";
 import { FONT_SIZES, LINE_WIDTHS, PATTERNS, type Obj, type Pattern, type Style } from "../model/types";
 import { componentAt, componentPieces, components, componentStyles, piecesSvgD } from "../model/parts";
-import { PALETTE, TINTS, isCustomColor, xcolorCss } from "../model/xcolor";
+import { PALETTE, TINTS, isCustomColor, splitTint, xcolorCss } from "../model/xcolor";
 import { askText, store, useStore } from "../store";
 
-/** "blue!30" -> ["blue", 30]; "green!60!black" -> ["green!60!black", 100] */
-function splitTint(c: string | null): [string | null, number] {
-  if (!c) return [null, 100];
-  if (isCustomColor(c)) return [c, 100];
-  for (const base of PALETTE) {
-    if (c === base) return [base, 100];
-    const m = c.match(new RegExp(`^${base.replace(/[!]/g, "\\!")}!(\\d+)$`));
-    if (m) return [base, parseInt(m[1])];
-  }
-  return [c, 100];
-}
 const withTint = (base: string, tint: number) => (tint >= 100 || isCustomColor(base) ? base : `${base}!${tint}`);
 
 /** A shortcut written on a button (when Settings shows them). */
@@ -228,7 +217,7 @@ export function StylePanel() {
               value={st.dash}
               onPick={(dash) => applyStyle({ dash })}
               options={[
-                { v: "solid", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" /></svg>, title: "solid" },
+                { v: "solid", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" /></svg>, title: "solid (_)", k: "_" },
                 { v: "dashed", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="5 4" /></svg>, title: "dashed (-)", k: "-" },
                 { v: "dotted", label: <svg width="34" height="10"><line x1="2" x2="32" y1="5" y2="5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="1.5 3" strokeLinecap="round" /></svg>, title: "dotted (.)", k: "." },
               ]}
@@ -242,7 +231,7 @@ export function StylePanel() {
           <h4>Fill</h4>
           <Swatches testid="fill-swatches" value={fillBase} allowNone onPick={(c) => applyStyle({ fill: c ? withTint(c, fillBase ? fillTint : 15) : null })} />
           {fillBase && (
-            <Seg value={fillTint} onPick={(t) => applyStyle({ fill: withTint(fillBase, t) })} options={TINTS.map((t) => ({ v: t, label: `${t}%`, title: `${fillBase}!${t}` }))} />
+            <Seg value={fillTint} onPick={(t) => applyStyle({ fill: withTint(fillBase, t) })} options={TINTS.map((t) => ({ v: t, label: `${t}%`, title: st.pattern ? `Hatching density ${t}% (lighter is sparser)` : `${fillBase}!${t}` }))} />
           )}
           <div className="patterns" data-testid="fill-patterns">
             {[{ p: null as Pattern | null, name: "Solid" }, ...PATTERNS].map(({ p, name }) => (

@@ -53,3 +53,25 @@ export const TINTS = [15, 30, 60, 100];
 
 /** A colour made with the colour picker (no tints: they're picked directly). */
 export const isCustomColor = (c: string | null) => !!c && RGB255.test(c.trim());
+
+/** "blue!30" -> ["blue", 30]; "green!60!black" -> ["green!60!black", 100] */
+export function splitTint(c: string | null): [string | null, number] {
+  if (!c) return [null, 100];
+  if (isCustomColor(c)) return [c, 100];
+  for (const base of PALETTE) {
+    if (c === base) return [base, 100];
+    const m = c.match(new RegExp(`^${base.replace(/[!]/g, "\\!")}!(\\d+)$`));
+    if (m) return [base, parseInt(m[1])];
+  }
+  return [c, 100];
+}
+
+/** A hatched fill: the tint buttons set how dense the hatching is (the lines
+ *  keep the full colour). Returns the colour and the pattern's tile size in pt
+ *  (3pt, TikZ's own patterns, at 100%). */
+export function patternLook(fill: string): { color: string; gap: number } {
+  const [base, tint] = splitTint(fill);
+  const GAPS: Record<number, number> = { 100: 3, 60: 4.5, 30: 6.5, 15: 9 };
+  const gap = GAPS[tint] ?? 3 * Math.pow(100 / Math.max(5, tint), 0.6);
+  return { color: base ?? fill, gap };
+}

@@ -2,7 +2,7 @@
 // Each item is a JSON file in the library folder (Settings), with the objects
 // (centred on the origin) and an SVG thumbnail.
 import { call } from "./api/client";
-import { getLabel, labelBox, labelImage } from "./labels/render";
+import { getLabel, labelBox, labelImage, labelNodeBox } from "./labels/render";
 import { curvePathD } from "./model/curve";
 import { geomBox, ptToCm, transformObj, translation, unionBox, type Box } from "./model/geometry";
 import { snapGrid } from "./model/snap";
@@ -120,7 +120,7 @@ export function thumbnailSvg(objs: Obj[]): string {
         break;
       case "label": {
         const e = getLabel(o);
-        const lb = labelBox(o);
+        const lb = labelNodeBox(o);
         const url = e && e.status === "ok" ? labelImage(e, 120) : null;
         if (url && lb) parts.push(`<g transform="translate(${lb.minX},${lb.maxY}) scale(1,-1)"><image href="${esc(url)}" width="${lb.maxX - lb.minX}" height="${lb.maxY - lb.minY}" preserveAspectRatio="none"/></g>`);
         break;

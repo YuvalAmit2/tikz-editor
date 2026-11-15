@@ -124,6 +124,7 @@ function onKeyDown(e: KeyboardEvent) {
     const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key]!;
     return nudge(d[0], d[1]);
   }
+  if (e.key === "_") return applyStyle({ dash: "solid" }); // ⇧- (the - key is dashed)
   if (e.shiftKey) {
     if (k === "h") return flipH();
     if (k === "v") return flipV();

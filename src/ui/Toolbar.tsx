@@ -2,8 +2,11 @@ import { useEffect, useRef } from "react";
 import { copyTikz, flipH, flipV, newFigure, open, rotate90, save, setSnapKind, setTool } from "../actions";
 import { store, useStore, type ToolName } from "../store";
 
-const I = ({ children }: { children: React.ReactNode }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+/** An icon. Lines are 1.25 wide; icons made of straight horizontal and
+ *  vertical lines use 1 (`crisp`), on whole or half units, so they land on
+ *  whole pixels of a Retina screen instead of looking grey and blurred. */
+const I = ({ children, crisp }: { children: React.ReactNode; crisp?: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={crisp ? 1 : 1.25} strokeLinecap="round" strokeLinejoin="round">
     {children}
   </svg>
 );
@@ -14,11 +17,11 @@ export const TOOLS: { tool: ToolName; key: string; label: string; icon: React.Re
   { tool: "polyline", key: "P", label: "Polyline / polygon", icon: <I><path d="M3 15l4-9 5 6 5-8" /></I> },
   { tool: "curve", key: "B", label: "Curve through points", icon: <I><path d="M3 15C5 4 9 4 10 10s5 6 7-5" /><circle cx="3" cy="15" r="1.2" fill="currentColor" /><circle cx="10" cy="10" r="1.2" fill="currentColor" /><circle cx="17" cy="5" r="1.2" fill="currentColor" /></I> },
   { tool: "sketch", key: "S", label: "Sketch (smooths your stroke)", icon: <I><path d="M3 14c2-1 2-6 5-6s1 7 4 6 2-8 5-8" /></I> },
-  { tool: "rect", key: "R", label: "Rectangle", icon: <I><rect x="3.5" y="5" width="13" height="10" /></I> },
+  { tool: "rect", key: "R", label: "Rectangle", icon: <I crisp><rect x="3.5" y="5" width="13" height="10" /></I> },
   { tool: "ellipse", key: "E", label: "Ellipse (⇧ for a circle)", icon: <I><ellipse cx="10" cy="10" rx="7.5" ry="4.5" /></I> },
   { tool: "point", key: "D", label: "Point (dot)", icon: <I><circle cx="10" cy="10" r="2.5" fill="currentColor" /></I> },
-  { tool: "text", key: "T", label: "Text / math label", icon: <I><path d="M5 5h10M10 5v11" /></I> },
-  { tool: "fill", key: "F", label: "Paint bucket: click inside a closed region to fill it", icon: <I><path d="M4 9l6-6 6 6-6 6z" /><path d="M16 12c1 1.5 1.5 2.5 1.5 3.2a1.5 1.5 0 01-3 0c0-.7.5-1.7 1.5-3.2z" fill="currentColor" stroke="none" /></I> },
+  { tool: "text", key: "T", label: "Text / math label", icon: <I crisp><path d="M5 5h10M10 5v11" /></I> },
+  { tool: "fill", key: "F", label: "Paint bucket: click inside a closed region to fill it", icon: <I><path d="M3.2 9.2L9 3.4l6.2 6.2-5.8 5.8a1.6 1.6 0 01-2.3 0L3.2 11.5a1.6 1.6 0 010-2.3z" /><path d="M3.4 9.6h11.6" /><path d="M8.2 4.2L6.3 2.3" /><path d="M16.8 12.2c.9 1.3 1.4 2.3 1.4 3a1.4 1.4 0 01-2.8 0c0-.7.5-1.7 1.4-3z" fill="currentColor" stroke="none" /></I> },
   { tool: "trim", key: "X", label: "Trim: click a piece, or drag across pieces, to cut it away at the crossings", icon: <I><circle cx="6" cy="14" r="2.3" /><circle cx="14" cy="14" r="2.3" /><path d="M7.5 12.3L15 3M12.5 12.3L5 3" /></I> },
 ];
 
@@ -69,10 +72,10 @@ export function Toolbar() {
       <div className="sep" />
       <div className="group">
         <Btn k="⇧H" disabled={!hasSel} title="Flip horizontally (⇧H)" onClick={flipH}>
-          <I><path d="M10 3v14" strokeDasharray="2 2" /><path d="M8 6L3 14h5zM12 6l5 8h-5z" /></I>
+          <I crisp><path d="M10 3v14" opacity="0.45" /><path d="M7.5 6.5L3.5 14h4zM12.5 6.5l4 7.5h-4z" /></I>
         </Btn>
         <Btn k="⇧V" disabled={!hasSel} title="Flip vertically (⇧V)" onClick={flipV}>
-          <I><path d="M3 10h14" strokeDasharray="2 2" /><path d="M6 8L14 3v5zM6 12l8 5v-5z" /></I>
+          <I crisp><path d="M3 10h14" opacity="0.45" /><path d="M6 7.5L13.5 3.5v4zM6 12.5l7.5 4v-4z" /></I>
         </Btn>
         <Btn k="⇧R" disabled={!hasSel} title="Rotate 90° counter-clockwise (⇧R)" onClick={() => rotate90(1)}>
           <I><path d="M15 9a5 5 0 10-1.5 4.5" /><path d="M15 4v5h-5" /></I>
@@ -87,7 +90,7 @@ export function Toolbar() {
         {name}
         {dirty ? " •" : ""}
       </div>
-      <div className="group">
+      <div className="group files">
         <button className="text-btn" title="New figure (⌘N)" onClick={newFigure}>New</button>
         <button className="text-btn" title="Open (⌘O)" onClick={open}>Open</button>
         <button className="text-btn primary" title="Save (⌘S)" onClick={() => save()}>Save</button>

@@ -1,6 +1,6 @@
 // Smart labels are placed with a guessed size when created; once the label
 // has been typed and compiled, it's placed again with its real size (once).
-import { getLabel, labelBox, labelStore } from "./labels/render";
+import { getLabel, labelBox, labelInkSize, labelStore, nodePointForInk } from "./labels/render";
 import { labelCrossesLines, placeLabel } from "./model/labelPlace";
 import type { LabelObj, Obj, Scene, Vec } from "./model/types";
 import { store } from "./store";
@@ -22,8 +22,8 @@ function update() {
       done.push(rest);
       continue;
     }
-    const { p, anchor } = placeLabel(targets, s.scene.objects, { w: e.w!, h: e.h! }, labelBox, [o.id]);
-    done.push({ ...rest, p, anchor });
+    const { p, anchor } = placeLabel(targets, s.scene.objects, labelInkSize(o)!, labelBox, [o.id]);
+    done.push({ ...rest, p: nodePointForInk(o, p, anchor), anchor });
   }
   // Not an undo step of its own: part of creating the label.
   if (done.length) store.preview(store.withReplaced(done));
@@ -62,12 +62,12 @@ export function followLabels(scene: Scene, prev: Scene | null, final: boolean): 
     const old = before.get(o.id) as LabelObj | undefined;
     // Moved by hand: it moved by something other than what its objects did.
     const byHand = !!old?.follow && Math.hypot(o.p.x - old.p.x - (o.follow.ref.x - old.follow.ref.x), o.p.y - old.p.y - (o.follow.ref.y - old.follow.ref.y)) > 1e-9;
-    const b = labelBox(o);
-    if (final && o.follow.avoid && b && !o.attach && !byHand) {
-      const size = { w: b.maxX - b.minX, h: b.maxY - b.minY };
-      if (labelCrossesLines(next.p, next.anchor, size, scene.objects, [o.id])) {
+    const size = labelInkSize(o);
+    if (final && o.follow.avoid && size && !o.attach && !byHand) {
+      const b = labelBox(next);
+      if (b && labelCrossesLines(b, scene.objects, [o.id])) {
         const { p, anchor } = placeLabel(targets, scene.objects, size, labelBox, [o.id]);
-        next = { ...next, p, anchor };
+        next = { ...next, p: nodePointForInk(o, p, anchor), anchor };
       }
     }
     if (next !== o) (changed ??= []).push(next);

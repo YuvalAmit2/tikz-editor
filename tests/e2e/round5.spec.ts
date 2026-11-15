@@ -166,13 +166,16 @@ test("labels: drawing through one moves it; dragging its dot doesn't make it jum
   }
   // A line drawn right through the label pushes it to a clear spot.
   const l = await lab();
-  const mid = { x: l.p.x + (l.anchor.includes("west") ? 0.15 : l.anchor.includes("east") ? -0.15 : 0), y: l.p.y + (l.anchor.includes("south") ? 0.15 : l.anchor.includes("north") ? -0.15 : 0) };
+  const lb = await page.evaluate((o) => (window as any).__labelBox(o), l);
+  const mid = { x: (lb.minX + lb.maxX) / 2, y: (lb.minY + lb.maxY) / 2 };
   await page.keyboard.press("l");
   await page.keyboard.down("Alt");
   await page.mouse.click(...(await at(page, mid.x - 2, mid.y)));
   await page.mouse.click(...(await at(page, mid.x + 2, mid.y)));
   await page.keyboard.up("Alt");
   const after = await lab();
-  expect(Math.hypot(after.p.x - l.p.x, after.p.y - l.p.y)).toBeGreaterThan(0.05);
+  // Its text is now clear of the line (its anchor point alone may hardly move).
+  const ab = await page.evaluate((o) => (window as any).__labelBox(o), after);
+  expect(ab.minY > mid.y || ab.maxY < mid.y).toBe(true);
   expect(before.follow.avoid).toBe(true);
 });

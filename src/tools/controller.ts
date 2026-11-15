@@ -217,14 +217,15 @@ export function getHandles(): Handle[] {
   if (sel.length === 0 || (sel.length === 1 && (sel[0].type === "label" || sel[0].type === "point"))) return [];
   const b = selectionBox();
   if (!b || (b.maxX - b.minX < 1e-9 && b.maxY - b.minY < 1e-9)) return [];
-  // A box handle sitting on a curve's anchor (e.g. its end at a corner)
-  // grabs the curve by that point instead of scaling it.
+  // A box handle sitting on a curve's point (e.g. its end at a corner) is
+  // that point instead: dragging it moves just that point (snapping onto
+  // other objects) and the rest of the curve stays, like a line's end.
   const z = s.view.zoom;
-  const own = sel.flatMap((o) => (o.type === "curve" ? o.nodes.map((n) => n.p) : []));
+  const own = sel.flatMap((o) => (o.type === "curve" ? o.nodes.map((n, j) => ({ id: o.id, j, p: n.p })) : []));
   return boxHandles(b, z).map((h) => {
     if (h.kind !== "box" && h.kind !== "edge") return h;
-    const q = own.find((p) => dist(p, h.p) * z < 5);
-    return q ? { ...h, kind: "grab" as const, p: q } : h;
+    const q = own.find((n) => dist(n.p, h.p) * z < 5);
+    return q ? { id: q.id, kind: "grab" as const, handle: 3 * q.j, p: q.p } : h;
   });
 }
 
@@ -614,8 +615,11 @@ function selectDown(e: PEvent) {
   const s = store.get();
   const h = handleAt(e);
   if (h && h.kind === "grab") {
-    drag = { kind: "move", ref: h.p, before: s.scene, orig: store.selected(), moved: false, downScreen: e.screen };
-    return;
+    const orig = store.objById(h.id);
+    if (orig?.type === "curve") {
+      drag = { kind: "handle", id: h.id, handle: h.handle, before: s.scene, orig, handles: nodeHandles(orig), mirror: e.shift };
+      return;
+    }
   }
   if (h) {
     if (h.id === "") {
@@ -878,6 +882,11 @@ export function onPointerMove(e: PEvent) {
     }
   }
   // Hover (no button): show snap target and drafts.
+  if (s.tool === "trim" || s.tool === "fill") {
+    // Nothing to snap: no snap dot or smart guides, just the trim preview.
+    store.set({ snap: null, guides: [], preview: s.tool === "trim" ? trimPreview(e.world) : [] });
+    return;
+  }
   if (s.tool !== "select") {
     const from = draft.length ? draft[draft.length - 1] : cdraft.length ? cdraft[cdraft.length - 1].p : null;
     const sr = doSnap(e.world, e, { from });
@@ -885,10 +894,6 @@ export function onPointerMove(e: PEvent) {
     if (s.tool === "polyline") preview = polylinePreview(sr.p);
     else if (s.tool === "curve") preview = curvePreview(sr.p);
     else if (s.tool === "sketch") preview = [];
-    else if (s.tool === "trim") {
-      store.set({ snap: null, preview: trimPreview(e.world) });
-      return;
-    }
     else if (draft.length === 1) {
       const o = buildShape(s.tool, draft[0], sr.p, e.shift);
       preview = o ? [o] : [];

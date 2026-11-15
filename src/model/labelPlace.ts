@@ -159,18 +159,19 @@ function candidates(targets: Obj[], gap: number): Candidate[] {
   return out;
 }
 
-/** Does a label box at p (with this anchor) cross any line of the scene? */
-export function labelCrossesLines(p: Vec, anchor: Anchor, size: { w: number; h: number }, scene: Obj[], ignore: string[] = []): boolean {
+/** Does a label's (ink) box cross any line of the scene? */
+export function labelCrossesLines(b: Box, scene: Obj[], ignore: string[] = []): boolean {
   const ign = new Set(ignore);
-  const b = boxAt(p, anchor, size);
-  // A little inside the box: touching the label's padding is fine.
-  const s = 0.03;
+  // A hair inside the box: just touching its padding is fine.
+  const s = 0.01;
   const inner = { minX: b.minX + s, minY: b.minY + s, maxX: b.maxX - s, maxY: b.maxY - s };
   if (inner.minX > inner.maxX || inner.minY > inner.maxY) return false;
   return strokes(scene.filter((o) => o.type !== "label" && !ign.has(o.id) && !o.hidden)).some(([a, e]) => segHitsBox(a, e, inner));
 }
 
-/** Best spot and anchor for a label of the given size labelling `targets`. */
+/** Best spot and anchor for a label of the given size labelling `targets`.
+ *  The size is the box around the label's visible text (see labelBox), so
+ *  the gap is the space between the text and the line. */
 export function placeLabel(
   targets: Obj[],
   scene: Obj[],
@@ -178,8 +179,8 @@ export function placeLabel(
   labelBoxOf: (o: LabelObj) => Box | null,
   ignore: string[] = [],
 ): { p: Vec; anchor: Anchor } {
-  // The label's own inner sep (about 1.2 mm) already keeps it off the line.
-  const gap = 0.02;
+  // Between the text's box (which has 1pt of padding) and the line: about 1 mm in all.
+  const gap = 0.07;
   const ign = new Set(ignore);
   const segs = strokes(scene.filter((o) => o.type !== "label" && !ign.has(o.id) && !o.hidden));
   const labels = scene.filter((o): o is LabelObj => o.type === "label" && !ign.has(o.id)).map(labelBoxOf).filter((b): b is Box => !!b);

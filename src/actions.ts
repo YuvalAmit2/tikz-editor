@@ -331,7 +331,7 @@ export function smartLabel() {
   if (targets.length === 0) return store.flash("Select something to label");
   const font = targets.length > 1 ? "\\large" : "";
   const others = s.scene.objects;
-  const est = { w: 0.45, h: 0.4 };
+  const est = { w: 0.3, h: 0.3 }; // the text's box; placed again once compiled
   const { p, anchor } = placeLabel(targets, others, est, labelBox);
   const o: LabelObj = {
     id: newId(),

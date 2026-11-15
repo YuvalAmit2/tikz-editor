@@ -673,6 +673,11 @@ button {
   margin: 0 4px;
 }
 
+/* Next to New/Open/Save, icons centre on the text buttons; their keys hang below. */
+.toolbar .files { align-items: center; }
+.toolbar .files .tool { position: relative; }
+.toolbar .files .tool .key { position: absolute; left: 0; right: 0; bottom: 1px; text-align: center; }
+
 /* Shortcut written under a toolbar button */
 .tool .key {
   font-size: 9.5px;
@@ -815,6 +820,8 @@ button {
   opacity: 0.8;
 }
 .widths button { position: relative; }
+.seg button { position: relative; }
+.seg .pkey { position: absolute; right: 2px; bottom: 0; margin: 0; font-size: 8px; line-height: 1.2; }
 .widths .pkey { position: absolute; right: 2px; bottom: 0; margin: 0; font-size: 8px; }
 .piece { flex-direction: column; gap: 1px; padding: 3px 4px; }
 .piece-name { font-size: 10px; }

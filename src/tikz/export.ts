@@ -9,7 +9,8 @@ import { labelBody, labelNodeOpts } from "../labels/mode";
 import { sceneGeomBox, transformObj, translation } from "../model/geometry";
 import { curveSegments } from "../model/curve";
 import { styledRuns } from "../model/parts";
-import type { Obj, Scene, Style } from "../model/types";
+import type { Obj, Pattern, Scene, Style } from "../model/types";
+import { patternLook } from "../model/xcolor";
 
 export const SCENE_MARKER = "%tikz-editor-scene ";
 
@@ -25,7 +26,7 @@ const coord = (p: { x: number; y: number }) => `(${fmt(p.x)},${fmt(p.y)})`;
 function styleOpts(s: Style, opts: { arrows: boolean }): string[] {
   const o: string[] = [];
   if (s.stroke) o.push(s.stroke === "black" ? "draw" : `draw=${s.stroke}`);
-  if (s.fill && s.pattern) o.push(`pattern=${s.pattern}`, s.fill === "black" ? "" : `pattern color=${s.fill}`);
+  if (s.fill && s.pattern) o.push(...patternOpts(s.pattern, s.fill));
   else if (s.fill) o.push(`fill=${s.fill}`);
   if (s.stroke) {
     if (Math.abs(s.width - 0.4) > 1e-9) o.push(`line width=${fmt(s.width)}pt`);
@@ -33,6 +34,24 @@ function styleOpts(s: Style, opts: { arrows: boolean }): string[] {
     if (opts.arrows && (s.arrowStart || s.arrowEnd)) o.push(`${s.arrowStart ? "<" : ""}-${s.arrowEnd ? ">" : ""}`);
   }
   return o.filter(Boolean);
+}
+
+/** A hatched fill. At full strength, TikZ's named pattern; lighter tints
+ *  space the hatching out (patterns.meta). */
+export function patternOpts(p: Pattern, fill: string): string[] {
+  const { color, gap } = patternLook(fill);
+  const col = color === "black" ? [] : [`pattern color=${color}`];
+  if (Math.abs(gap - 3) < 1e-9) return [`pattern=${p}`, ...col];
+  const diag = fmt(gap / Math.SQRT2);
+  const meta: Record<Pattern, string> = {
+    "north east lines": `Lines[angle=45,distance=${diag}pt]`,
+    "north west lines": `Lines[angle=-45,distance=${diag}pt]`,
+    "horizontal lines": `Lines[angle=0,distance=${fmt(gap)}pt]`,
+    "vertical lines": `Lines[angle=90,distance=${fmt(gap)}pt]`,
+    crosshatch: `Hatch[distance=${fmt(gap)}pt]`,
+    dots: `Dots[distance=${fmt(gap)}pt]`,
+  };
+  return [`pattern={${meta[p]}}`, ...col];
 }
 
 /** An object with styled pieces: its fill, then one \path per stretch. */
@@ -149,7 +168,7 @@ export function sceneToPicture(scene: Scene): string {
   const m = box ? translation(-Math.round(((box.minX + box.maxX) / 2) * 4) / 4, -Math.round(((box.minY + box.maxY) / 2) * 4) / 4) : null;
   const objs = m ? scene.objects.map((o) => transformObj(o, m)) : scene.objects;
   const lines: string[] = [];
-  const libs = [objs.some((o) => o.type === "curve" && o.text) && "decorations.text", objs.some((o) => o.style.pattern && o.style.fill && !o.hidden) && "patterns"].filter(Boolean);
+  const libs = [objs.some((o) => o.type === "curve" && o.text) && "decorations.text", objs.some((o) => o.style.pattern && o.style.fill && !o.hidden) && "patterns", objs.some((o) => o.style.pattern && o.style.fill && !o.hidden && patternLook(o.style.fill).gap !== 3) && "patterns.meta"].filter(Boolean);
   if (libs.length) lines.push(`% needs \\usetikzlibrary{${libs.join(",")}}`);
   lines.push("\\begin{tikzpicture}");
   for (const o of objs) {

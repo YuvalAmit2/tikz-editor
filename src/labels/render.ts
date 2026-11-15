@@ -5,7 +5,7 @@ import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { call } from "../api/client";
 import type { Box } from "../model/geometry";
-import type { Anchor, LabelObj } from "../model/types";
+import type { Anchor, LabelObj, Vec } from "../model/types";
 import { labelBody, labelNodeOpts } from "./mode";
 import { store } from "../store";
 
@@ -19,6 +19,11 @@ interface Entry {
   page?: pdfjs.PDFPageProxy;
   w?: number; // cm
   h?: number; // cm
+  /** The visible ink (plus a hair of padding), in cm from the node box's
+   *  lower-left corner. The node box itself has TikZ's inner sep around TeX's
+   *  box, which is much larger than the text and often lopsided ($z_2$,
+   *  $\cdots$); the editor shows, picks and places labels by their ink. */
+  ink?: Box;
   /** Rendered images by pixels-per-cm bucket. */
   images: Map<number, string>;
   rendering: Set<number>;
@@ -96,6 +101,7 @@ async function flush() {
         e.page = page;
         e.w = vp.width * BP_TO_CM;
         e.h = vp.height * BP_TO_CM;
+        e.ink = await measureInk(page, e.w, e.h).catch(() => undefined);
         e.status = "ok";
       } else {
         e.status = "error";
@@ -112,6 +118,41 @@ async function flush() {
     }
   }
   changed();
+}
+
+/** Padding around the ink: 1pt, so the outline hugs the text without touching it. */
+const INK_PAD = 2.54 / 72.27;
+
+/** Where the ink is on a label's page: rendered once, small, and scanned. */
+async function measureInk(page: pdfjs.PDFPageProxy, wCm: number, hCm: number): Promise<Box> {
+  const whole: Box = { minX: 0, minY: 0, maxX: wCm, maxY: hCm };
+  const maxBp = Math.max(wCm, hCm) / BP_TO_CM;
+  const scale = Math.min(8, 1600 / Math.max(maxBp, 1)); // px per bp
+  const vp = page.getViewport({ scale });
+  const canvas = document.createElement("canvas");
+  const W = (canvas.width = Math.max(1, Math.ceil(vp.width)));
+  const H = (canvas.height = Math.max(1, Math.ceil(vp.height)));
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  await page.render({ canvas, canvasContext: ctx, viewport: vp, background: "rgba(0,0,0,0)" } as any).promise;
+  const a = ctx.getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++)
+      if (a[(y * W + x) * 4 + 3] > 40) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+  if (x1 < 0) return whole;
+  const cm = BP_TO_CM / scale; // cm per px
+  // Pixel rows count from the top; the box's y goes up.
+  return {
+    minX: Math.max(0, x0 * cm - INK_PAD),
+    maxX: Math.min(wCm, (x1 + 1) * cm + INK_PAD),
+    minY: Math.max(0, hCm - (y1 + 1) * cm - INK_PAD),
+    maxY: Math.min(hCm, hCm - y0 * cm + INK_PAD),
+  };
 }
 
 /** Look up (and request if needed) the compiled label. */
@@ -176,8 +217,40 @@ export function anchorFrac(a: Anchor): { fx: number; fy: number } {
   return { fx, fy };
 }
 
-/** Box of a label in world coordinates (cm), if it has been compiled. */
+/** The box around a label's visible text, in world coordinates (cm): what is
+ *  outlined when selected, clicked, lined up and kept clear of lines. Before
+ *  the label is compiled, a placeholder box. */
 export function labelBox(o: LabelObj): Box | null {
+  const b = labelNodeBox(o);
+  const e = getLabel(o);
+  if (!b || !e?.ink) return b;
+  return { minX: b.minX + e.ink.minX, minY: b.minY + e.ink.minY, maxX: b.minX + e.ink.maxX, maxY: b.minY + e.ink.maxY };
+}
+
+/** The size of a label's ink box, once compiled. */
+export function labelInkSize(o: LabelObj): { w: number; h: number } | null {
+  const e = getLabel(o);
+  if (!e || e.status !== "ok") return null;
+  const k = e.ink ?? { minX: 0, minY: 0, maxX: e.w!, maxY: e.h! };
+  return { w: k.maxX - k.minX, h: k.maxY - k.minY };
+}
+
+/** The node position that puts a label's ink box at `p` with this anchor
+ *  (placement works with the ink box; TikZ anchors the whole node). */
+export function nodePointForInk(o: LabelObj, p: Vec, anchor: Anchor): Vec {
+  const e = getLabel(o);
+  if (!e || e.status !== "ok" || !e.ink) return p;
+  const { fx, fy } = anchorFrac(anchor);
+  const k = e.ink;
+  return {
+    x: p.x - fx * (k.maxX - k.minX) - k.minX + fx * e.w!,
+    y: p.y - fy * (k.maxY - k.minY) - k.minY + fy * e.h!,
+  };
+}
+
+/** The whole TikZ node's box (inner sep included), where the compiled image
+ *  is drawn. */
+export function labelNodeBox(o: LabelObj): Box | null {
   const e = getLabel(o);
   if (!e || e.status !== "ok") {
     // Placeholder box while compiling / on error

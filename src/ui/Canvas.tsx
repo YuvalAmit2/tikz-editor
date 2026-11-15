@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { zoomAt } from "../actions";
-import { getLabel, labelBox, labelImage, labelStore } from "../labels/render";
+import { getLabel, labelBox, labelImage, labelNodeBox, labelStore } from "../labels/render";
 import { ptToCm, sub, len, type Box } from "../model/geometry";
 import type { Obj, Style, Vec } from "../model/types";
-import { xcolorCss } from "../model/xcolor";
+import { patternLook, xcolorCss } from "../model/xcolor";
 import { curvePathD, curveSegments } from "../model/curve";
 import { componentPieces, piecesSvgD, styledRuns } from "../model/parts";
 import {
@@ -150,17 +150,18 @@ function strokeProps(st: Style, z: number) {
 
 const patternId = (p: string, color: string) => "pat-" + (p + "-" + color).replace(/[^a-zA-Z0-9]/g, "_");
 
-/** SVG patterns for the hatched fills in use (TikZ's patterns: 3pt apart). */
+/** SVG patterns for the hatched fills in use (TikZ's patterns: 3pt apart at full strength, wider for lighter tints). */
 function PatternDefs({ objects }: { objects: Obj[] }) {
   const used = new Map<string, { p: string; c: string }>();
   for (const o of objects) if (o.style.pattern && o.style.fill) used.set(patternId(o.style.pattern, o.style.fill), { p: o.style.pattern, c: o.style.fill });
   if (!used.size) return null;
-  const t = ptToCm(3);
   const w = ptToCm(0.4);
   return (
     <defs>
       {[...used].map(([id, { p, c }]) => {
-        const col = xcolorCss(c);
+        const look = patternLook(c);
+        const col = xcolorCss(look.color);
+        const t = ptToCm(look.gap);
         const line = (x1: number, y1: number, x2: number, y2: number) => <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={col} strokeWidth={w} />;
         return (
           <pattern key={id} id={id} patternUnits="userSpaceOnUse" width={t} height={t}>
@@ -330,7 +331,7 @@ function PlainObjView({ o, z }: { o: Obj; z: number }) {
 function LabelView({ o, z }: { o: Extract<Obj, { type: "label" }>; z: number }) {
   const editing = useStore((s) => s.editingLabel === o.id);
   const e = getLabel(o);
-  const b = labelBox(o);
+  const b = labelNodeBox(o);
   if (!e || !b) {
     // Empty label: show where it is while it's being edited.
     if (!editing) return null;

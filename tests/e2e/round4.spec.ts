@@ -101,7 +101,9 @@ test("a label made with the Label button moves with its dot", async ({ page }) =
   // Close to the dot
   expect(Math.hypot(before.p.x, before.p.y)).toBeLessThan(0.3);
   // Turn off "keep clear" so it just moves along, then drag the dot by (2, 1)
-  await page.mouse.click(...(await at(page, before.p.x, before.p.y)));
+  // (click the middle of its text: its anchor point is outside the text's box)
+  const lb = await page.evaluate((o) => (window as any).__labelBox(o), before);
+  await page.mouse.click(...(await at(page, (lb.minX + lb.maxX) / 2, (lb.minY + lb.maxY) / 2)));
   await page.getByTestId("label-avoid").uncheck();
   await page.mouse.click(...(await at(page, 0, 0)));
   await page.mouse.move(...(await at(page, 0, 0)));
