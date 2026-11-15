@@ -4,6 +4,7 @@ import { getLabel, labelBox, labelImage, labelNodeBox, labelStore } from "../lab
 import { ptToCm, sub, len, type Box } from "../model/geometry";
 import type { Obj, Style, Vec } from "../model/types";
 import { patternLook, xcolorCss } from "../model/xcolor";
+import { marksOf } from "../model/marks";
 import { curvePathD, curveSegments } from "../model/curve";
 import { componentPieces, piecesSvgD, styledRuns } from "../model/parts";
 import {
@@ -205,6 +206,26 @@ function ArrowTip({ tip, from, st, z }: { tip: Vec; from: Vec; st: Style; z: num
   );
 }
 
+/** Arrowheads in the middle of the line (style.mid), as TikZ draws them:
+ *  the tip at the mark, a second one just behind it for "two". */
+function MidMarks({ o, st, z }: { o: Obj; st: Style; z: number }) {
+  const marks = marksOf(o);
+  if (!marks.length || !st.stroke) return null;
+  const n = Math.min(2, Math.abs(st.mid ?? 0));
+  const lw = ptToCm(st.width);
+  const step = ptToCm(2.2) + 3.5 * lw;
+  return (
+    <>
+      {marks.flatMap((m, i) =>
+        Array.from({ length: n }, (_, k) => {
+          const tip = { x: m.p.x - m.dir.x * step * 0.8 * k, y: m.p.y - m.dir.y * step * 0.8 * k };
+          return <ArrowTip key={i + "-" + k} tip={tip} from={{ x: tip.x - m.dir.x, y: tip.y - m.dir.y }} st={st} z={z} />;
+        }),
+      )}
+    </>
+  );
+}
+
 /** pt per font size command (11pt document). */
 const FONT_PT: Record<string, number> = { "\\tiny": 6, "\\scriptsize": 8, "\\footnotesize": 9, "\\small": 10, "": 10.95, "\\large": 12, "\\Large": 14.4, "\\LARGE": 17.28 };
 
@@ -273,6 +294,7 @@ function PartedView({ o, z }: { o: Obj; z: number }) {
       ))}
       {o.style.arrowEnd && pn && lastRun!.style.stroke && <ArrowTip tip={pn.b} from={dirFrom(pn, true)} st={lastRun!.style} z={z} />}
       {o.style.arrowStart && p0 && firstRun!.style.stroke && <ArrowTip tip={p0.a} from={dirFrom(p0, false)} st={firstRun!.style} z={z} />}
+      <MidMarks o={o} st={{ ...o.style, dash: "solid" }} z={z} />
     </g>
   );
 }
@@ -287,6 +309,7 @@ function PlainObjView({ o, z }: { o: Obj; z: number }) {
           <path d={d} {...strokeProps(o.style, z)} />
           {!o.closed && o.style.stroke && o.style.arrowEnd && n >= 2 && <ArrowTip tip={o.pts[n - 1]} from={o.pts[n - 2]} st={o.style} z={z} />}
           {!o.closed && o.style.stroke && o.style.arrowStart && n >= 2 && <ArrowTip tip={o.pts[0]} from={o.pts[1]} st={o.style} z={z} />}
+          <MidMarks o={o} st={o.style} z={z} />
         </g>
       );
     }
@@ -306,21 +329,20 @@ function PlainObjView({ o, z }: { o: Obj; z: number }) {
           <path d={curvePathD(o)} {...strokeProps(o.style, z)} />
           {!closed && last && o.style.stroke && o.style.arrowEnd && <ArrowTip tip={last.b} from={tipFrom(last, true)} st={o.style} z={z} />}
           {!closed && first && o.style.stroke && o.style.arrowStart && <ArrowTip tip={first.a} from={tipFrom(first, false)} st={o.style} z={z} />}
+          <MidMarks o={o} st={o.style} z={z} />
         </g>
       );
     }
-    case "ellipse":
+    case "ellipse": {
+      const el = <ellipse data-id={o.id} cx={0} cy={0} rx={o.rx} ry={o.ry} transform={`translate(${o.c.x},${o.c.y}) rotate(${o.rot})`} {...strokeProps(o.style, z)} />;
+      if (!o.style.mid) return el;
       return (
-        <ellipse
-          data-id={o.id}
-          cx={0}
-          cy={0}
-          rx={o.rx}
-          ry={o.ry}
-          transform={`translate(${o.c.x},${o.c.y}) rotate(${o.rot})`}
-          {...strokeProps(o.style, z)}
-        />
+        <g data-id={o.id}>
+          {el}
+          <MidMarks o={o} st={o.style} z={z} />
+        </g>
       );
+    }
     case "point":
       return <circle data-id={o.id} cx={o.p.x} cy={o.p.y} r={ptToCm(o.size)} fill={xcolorCss(o.style.stroke ?? "black")} />;
     case "label":

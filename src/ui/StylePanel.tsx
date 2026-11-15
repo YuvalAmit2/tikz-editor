@@ -55,11 +55,11 @@ function Swatches({ value, onPick, allowNone, testid }: { value: string | null; 
   );
 }
 
-function Seg<T extends string | number | boolean>({ options, value, onPick }: { options: { v: T; label: React.ReactNode; title?: string; k?: string }[]; value: T | undefined; onPick: (v: T) => void }) {
+function Seg<T extends string | number | boolean>({ options, value, onPick, testid }: { options: { v: T; label: React.ReactNode; title?: string; k?: string }[]; value: T | undefined; onPick: (v: T) => void; testid?: string }) {
   return (
     <div className="seg">
       {options.map((o) => (
-        <button key={String(o.v)} title={o.title} className={value === o.v ? "active" : ""} onClick={() => onPick(o.v)}>
+        <button key={String(o.v)} title={o.title} className={value === o.v ? "active" : ""} onClick={() => onPick(o.v)} data-testid={testid ? `${testid}-${o.v}` : undefined}>
           {o.label}
           {o.k && <K k={o.k} />}
         </button>
@@ -175,6 +175,7 @@ export function StylePanel() {
   const types = new Set(objs.map((o) => o.type));
   const onlyLabels = objs.length > 0 && [...types].every((t) => t === "label");
   const onlyPoints = objs.length > 0 && [...types].every((t) => t === "point");
+  const hasLine = objs.length === 0 || objs.some((o) => o.type === "path" || o.type === "curve" || o.type === "ellipse");
   const hasOpen = objs.length === 0 || objs.some((o) => (o.type === "path" || o.type === "curve") && !o.closed);
   const hasFillable = objs.length === 0 || objs.some((o) => ((o.type === "path" || o.type === "curve") && (o.closed || !!o.style.fill)) || o.type === "ellipse");
   const labels = objs.filter((o): o is Extract<Obj, { type: "label" }> => o.type === "label");
@@ -261,6 +262,24 @@ export function StylePanel() {
               { v: "<-", label: "←" },
               { v: "<->", label: "↔" },
             ]}
+          />
+        </section>
+      )}
+
+      {hasLine && !onlyLabels && !onlyPoints && !pieceMode && (
+        <section>
+          <h4>Arrows in the middle</h4>
+          <Seg
+            value={st.mid ?? 0}
+            onPick={(mid) => applyStyle({ mid: mid || undefined })}
+            options={[
+              { v: 0, label: "—", title: "None" },
+              { v: 1, label: "›", title: "One, along the line (each straight edge gets one)" },
+              { v: 2, label: "»", title: "Two, along the line" },
+              { v: -1, label: "‹", title: "One, pointing back" },
+              { v: -2, label: "«", title: "Two, pointing back" },
+            ]}
+            testid="mid"
           />
         </section>
       )}

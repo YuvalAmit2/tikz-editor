@@ -25,6 +25,7 @@ function randomStyle(): Style {
     fill: pick([null, null, "orange!15", "gray!30"]),
     arrowStart: rnd() < 0.2,
     arrowEnd: rnd() < 0.3,
+    mid: pick([0, 0, 0, 1, 2, -1]),
   };
 }
 function randomNodes(n: number): CurveNode[] {

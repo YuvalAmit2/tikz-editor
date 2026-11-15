@@ -19,6 +19,9 @@ export interface Style {
   pattern?: Pattern | null;
   arrowStart: boolean;
   arrowEnd: boolean;
+  /** Arrowheads in the middle of each straight edge (or halfway along a
+   *  curve or ellipse): 1 or 2 of them, negative pointing backwards. */
+  mid?: number;
 }
 
 export type Pattern = "north east lines" | "north west lines" | "horizontal lines" | "vertical lines" | "crosshatch" | "dots";
