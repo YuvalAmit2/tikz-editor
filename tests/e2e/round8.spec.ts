@@ -204,7 +204,8 @@ test("a figure opened from outside goes in its own tab", async ({ page }) => {
   // Files that don't exist yet: new figures that will be saved there.
   const dir = "/tmp/tikz-editor-e2e-tabs";
   await commit(page, [{ id: "a", type: "point", p: { x: 0, y: 0 }, size: 1.5 }]);
-  const openFromOutside = (p: string) => page.evaluate((p) => import("/src/actions.ts").then((m) => m.openFromOutside(p)), p);
+  const openFromOutside = (p: string) =>
+    page.evaluate(([p, url]) => import(/* @vite-ignore */ url).then((m) => m.openFromOutside(p)), [p, "/src/actions.ts"] as const);
   await openFromOutside(`${dir}/one.tikz`);
   await expect(page.getByTestId("tab")).toHaveCount(2);
   expect((await st(page)).filePath).toBe(`${dir}/one.tikz`);
