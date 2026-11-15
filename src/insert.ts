@@ -2,6 +2,8 @@
 // graphs of functions.
 import { canvasSize } from "./actions";
 import { graphPieces, parseExpr } from "./model/expr";
+import { sampleCurve } from "./model/curve";
+import { ellipsePoint } from "./model/geometry";
 import { newId, type CurveObj, type Obj, type PathObj } from "./model/types";
 import { askText, store } from "./store";
 
@@ -85,4 +87,99 @@ export async function plotFunction() {
   }));
   place(curves);
   store.flash(`y = ${v.split(",")[0].trim()} for ${plot.a} ≤ x ≤ ${plot.b}`);
+}
+
+/** Points along a line or curve, evenly by length (k points). */
+function resample(o: Obj, k: number): { x: number; y: number }[] | null {
+  let pts: { x: number; y: number }[];
+  if (o.type === "path") pts = o.closed ? [...o.pts, o.pts[0]] : o.pts;
+  else if (o.type === "curve") pts = sampleCurve(o, 30);
+  else if (o.type === "ellipse") {
+    pts = [];
+    for (let i = 0; i <= 120; i++) pts.push(ellipsePoint(o, (i / 120) * 2 * Math.PI));
+  } else return null;
+  const acc = [0];
+  for (let i = 1; i < pts.length; i++) acc.push(acc[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  const total = acc[acc.length - 1];
+  if (total < 1e-9) return null;
+  const out: { x: number; y: number }[] = [];
+  let j = 1;
+  for (let i = 0; i < k; i++) {
+    const s = (total * i) / (k - 1);
+    while (j < acc.length - 1 && acc[j] < s) j++;
+    const u = (s - acc[j - 1]) / (acc[j] - acc[j - 1] || 1);
+    out.push({ x: pts[j - 1].x + (pts[j].x - pts[j - 1].x) * u, y: pts[j - 1].y + (pts[j].y - pts[j - 1].y) * u });
+  }
+  return out;
+}
+
+/** n objects evenly between a and b (curves, lines, ellipses). Two lines
+ *  with the same number of points, or two curves with the same number of
+ *  anchors, blend point by point; anything else as smooth curves. */
+export function blendBetween(a: Obj, b: Obj, n: number): Obj[] {
+  const out: Obj[] = [];
+  const lerp = (p: { x: number; y: number }, q: { x: number; y: number }, t: number) => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+  const closed = (o: Obj) => (o.type === "path" || o.type === "curve" ? o.closed : o.type === "ellipse");
+  for (let i = 1; i <= n; i++) {
+    const t = i / (n + 1);
+    const style = { ...a.style, mid: undefined };
+    if (a.type === "path" && b.type === "path" && a.pts.length === b.pts.length && a.closed === b.closed) {
+      out.push({ id: newId(), type: "path", style, pts: a.pts.map((p, j) => lerp(p, b.pts[j], t)), closed: a.closed });
+    } else if (a.type === "curve" && b.type === "curve" && a.nodes.length === b.nodes.length && a.closed === b.closed) {
+      out.push({ id: newId(), type: "curve", style, nodes: a.nodes.map((nd, j) => ({ p: lerp(nd.p, b.nodes[j].p, t), mode: nd.mode === "corner" ? "corner" : "smooth" })), closed: a.closed });
+    } else if (a.type === "ellipse" && b.type === "ellipse") {
+      out.push({ id: newId(), type: "ellipse", style, c: lerp(a.c, b.c, t), rx: a.rx + (b.rx - a.rx) * t, ry: a.ry + (b.ry - a.ry) * t, rot: a.rot + (b.rot - a.rot) * t });
+    } else {
+      const both = closed(a) && closed(b);
+      // From a straight-sided shape: fine polylines (a smooth curve through a
+      // few points of a square wobbles); between curves: smooth curves.
+      const straight = a.type === "path" || b.type === "path";
+      const k = straight ? 64 : 16;
+      const pa = resample(a, both ? k + 1 : k);
+      const pb = resample(b, both ? k + 1 : k);
+      if (!pa || !pb) return [];
+      let qb = pb;
+      if (both) {
+        // Closed: start b where it lines up best with a, going the same way round.
+        const ring = pb.slice(0, k);
+        let best = Infinity;
+        for (const dir of [1, -1])
+          for (let r = 0; r < k; r++) {
+            const cand = Array.from({ length: k }, (_, j) => ring[(((r + dir * j) % k) + k) % k]);
+            const cost = cand.reduce((sum, q, j) => sum + Math.hypot(q.x - pa[j].x, q.y - pa[j].y), 0);
+            if (cost < best) {
+              best = cost;
+              qb = [...cand, cand[0]];
+            }
+          }
+      }
+      const pts = pa.map((p, j) => lerp(p, qb[j], t));
+      if (both) pts.pop();
+      if (straight) out.push({ id: newId(), type: "path", style, pts, closed: both });
+      else out.push({ id: newId(), type: "curve", style, nodes: pts.map((p) => ({ p, mode: "smooth" as const })), closed: both });
+    }
+  }
+  return out;
+}
+
+export async function blendSelection() {
+  const sel = store.selected().filter((o) => o.type === "path" || o.type === "curve" || o.type === "ellipse");
+  if (sel.length !== 2) return store.flash("Select two lines, curves or ellipses to blend between");
+  const v = await askText("Blend", { label: "How many in between", initial: "3", ok: "Blend" });
+  if (v === null) return;
+  const n = parseInt(v, 10);
+  if (!(n >= 1 && n <= 50)) return store.flash("Give a number from 1 to 50");
+  // Open lines run the same way (else the blend twists).
+  let [a, b] = sel;
+  const ends = (o: Obj) => (o.type === "path" && !o.closed ? [o.pts[0], o.pts[o.pts.length - 1]] : o.type === "curve" && !o.closed ? [o.nodes[0].p, o.nodes[o.nodes.length - 1].p] : null);
+  const ea = ends(a);
+  const eb = ends(b);
+  if (ea && eb) {
+    const d = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.hypot(p.x - q.x, p.y - q.y);
+    if (d(ea[0], eb[0]) + d(ea[1], eb[1]) > d(ea[0], eb[1]) + d(ea[1], eb[0])) {
+      if (b.type === "path") b = { ...b, pts: [...b.pts].reverse() };
+      if (b.type === "curve") b = { ...b, nodes: [...b.nodes].reverse().map((nd) => ({ ...nd, ...(nd.hin || nd.hout ? { hin: nd.hout, hout: nd.hin } : {}) })) };
+    }
+  }
+  place(blendBetween(a, b, n));
 }

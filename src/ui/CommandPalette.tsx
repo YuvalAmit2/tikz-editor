@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as A from "../actions";
 import { insertLibraryItem, libraryStore, reloadLibrary, saveSelectionToLibrary } from "../library";
 import { store, useStore } from "../store";
-import { insertRegularPolygon, plotFunction } from "../insert";
+import { blendSelection, insertRegularPolygon, plotFunction } from "../insert";
 import { TOOLS } from "./Toolbar";
 
 interface Cmd {
@@ -49,6 +49,7 @@ function commands(): Cmd[] {
     { title: `After placing an object: ${s.settings.returnToSelect ? "keep the tool" : "return to Select"}`, run: toggle("returnToSelect") },
     { title: "Plot a function y = f(x)…", run: plotFunction },
     { title: "Regular polygon…", run: insertRegularPolygon },
+    { title: "Blend: curves in between the two selected…", run: blendSelection },
     { title: "Save selection to library…", run: saveSelectionToLibrary },
     { title: "Show library", run: () => store.set({ side: "library" }) },
     { title: "Settings", hint: "⌘,", run: () => store.set({ showSettings: true }) },

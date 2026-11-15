@@ -6,7 +6,7 @@ import { withAttached } from "../../src/model/attach";
 import { waved } from "../../src/model/wave";
 import { graphPieces, parseExpr } from "../../src/model/expr";
 import { sampleCurve } from "../../src/model/curve";
-import { parsePlot } from "../../src/insert";
+import { blendBetween, parsePlot } from "../../src/insert";
 import { scalingAbout, transformObj, translation } from "../../src/model/geometry";
 import { fmt, sceneToTikz } from "../../src/tikz/export";
 import { DEFAULT_STYLE, type Obj } from "../../src/model/types";
@@ -171,5 +171,25 @@ describe("braces, see-through fills, label backgrounds", () => {
     expect(sceneToTikz({ version: 1, objects: [e] })).toContain("fill=red!60,fill opacity=0.5");
     const l: Obj = { id: "l", type: "label", style: DEFAULT_STYLE, p: { x: 0, y: 0 }, text: "x", textMode: false, anchor: "center", font: "", bg: true };
     expect(sceneToTikz({ version: 1, objects: [l] })).toContain("fill=white] at (0,0) {$x$}");
+  });
+});
+
+describe("blend", () => {
+  it("evenly between two lines, point by point", () => {
+    const a: Obj = { id: "a", type: "path", style: DEFAULT_STYLE, pts: [{ x: 0, y: 0 }, { x: 4, y: 0 }], closed: false };
+    const b: Obj = { id: "b", type: "path", style: DEFAULT_STYLE, pts: [{ x: 0, y: 4 }, { x: 4, y: 4 }], closed: false };
+    const out = blendBetween(a, b, 3);
+    expect(out.map((o) => o.type === "path" && o.pts[0].y)).toEqual([1, 2, 3]);
+  });
+  it("between different shapes, closed ones stay closed", () => {
+    const sq: Obj = { id: "s", type: "path", style: DEFAULT_STYLE, pts: [{ x: -1, y: -1 }, { x: 1, y: -1 }, { x: 1, y: 1 }, { x: -1, y: 1 }], closed: true };
+    const ci: Obj = { id: "c", type: "ellipse", style: DEFAULT_STYLE, c: { x: 0, y: 0 }, rx: 0.2, ry: 0.2, rot: 0 };
+    const out = blendBetween(sq, ci, 2);
+    expect(out).toHaveLength(2);
+    for (const o of out) expect(o.type === "path" && o.closed).toBe(true);
+    // Nested: the first is inside the square and outside the second.
+    const r = (o: Obj) => (o.type === "path" ? Math.max(...o.pts.map((p) => Math.hypot(p.x, p.y))) : 0);
+    expect(r(out[0])).toBeLessThan(Math.SQRT2);
+    expect(r(out[1])).toBeLessThan(r(out[0]));
   });
 });
