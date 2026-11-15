@@ -23,7 +23,7 @@ import {
   zoomToFit,
   zoomTrueSize,
 } from "../actions";
-import { call } from "../api/client";
+import { call, isElectron } from "../api/client";
 import { DEFAULT_SNIPPET_FILE, withDefaults, type Settings } from "../model/settings";
 import { loadSnippets } from "./snippets";
 import { initSmartLabels } from "../smartLabels";
@@ -31,7 +31,9 @@ import { LINE_WIDTHS } from "../model/types";
 import { cancelDraft, deleteActiveNode, finishCurve, finishPolyline, hasDraft, insertAtHint, lastCanvasPoint, removeLastDraftPoint, setSpaceDown, spaceWasUsed } from "../tools/controller";
 import { insertLibraryItem, libraryStore } from "../library";
 import { ContextMenu } from "./ContextMenu";
-import { groupSelection, smartLabel, toggleDash, toggleGridSnap, toggleHidden, ungroupSelection } from "../actions";
+import { closeTab, closeWindow, groupSelection, newTab, nextTab, smartLabel, toggleDash, toggleGridSnap, toggleHidden, ungroupSelection } from "../actions";
+import { TabBar } from "./TabBar";
+import { Choice } from "./Choice";
 import { store, useStore } from "../store";
 import { Canvas } from "./Canvas";
 import { SettingsDialog } from "./SettingsDialog";
@@ -53,7 +55,12 @@ function isTyping(e: KeyboardEvent) {
 }
 
 function onKeyDown(e: KeyboardEvent) {
-  if (isTyping(e) || store.get().showSettings) return;
+  if (isTyping(e) || store.get().showSettings || store.get().choice) return;
+  // ⌃Tab / ⌃⇧Tab: next and previous tab.
+  if (e.key === "Tab" && e.ctrlKey) {
+    e.preventDefault();
+    return nextTab(e.shiftKey ? -1 : 1);
+  }
   const mod = e.metaKey || e.ctrlKey;
   const k = e.key.toLowerCase();
   const s = store.get();
@@ -69,6 +76,9 @@ function onKeyDown(e: KeyboardEvent) {
     if (e.key === "Enter") return handled(), saveAndHide();
     if (k === "o") return handled(), open();
     if (k === "n") return handled(), newFigure();
+    // Tabs (in the app, its menu has ⌘T and ⌘W).
+    if (k === "t" && !isElectron) return handled(), newTab();
+    if (k === "w" && !isElectron) return handled(), void closeTab();
     if (k === "a") return handled(), selectAll();
     if (k === "c") return handled(), copy();
     if (k === "v") return handled(), paste();
@@ -191,8 +201,18 @@ export function App() {
       (window as any).__ready = true; // for the UI tests: settings are loaded
     })();
     (window.tikzApi as any)?.onOpenFile?.((p: string) => openFromOutside(p));
+    // The app's menu (⌘T, ⌘W, ⌃Tab) and its close button.
+    (window.tikzApi as any)?.onMenu?.((what: string) => {
+      if (what === "new-tab") newTab();
+      if (what === "close-tab") void closeTab();
+      if (what === "next-tab") nextTab(1);
+      if (what === "prev-tab") nextTab(-1);
+      if (what === "close-window") void closeWindow();
+    });
     const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (store.get().dirty) e.preventDefault();
+      // Any tab with changes: don't let the page go (a reload would lose
+      // them; closing the app's window asks about each tab first).
+      if (store.get().tabs.some((t) => store.doc(t)?.dirty)) e.preventDefault();
     };
     window.addEventListener("beforeunload", beforeUnload);
     return () => {
@@ -218,6 +238,7 @@ export function App() {
 
   return (
     <div className="app">
+      <TabBar />
       <Toolbar />
       <div className="main">
         <Canvas />
@@ -227,6 +248,7 @@ export function App() {
       <SettingsDialog />
       <CommandPalette />
       <Prompt />
+      <Choice />
       <ContextMenu />
     </div>
   );

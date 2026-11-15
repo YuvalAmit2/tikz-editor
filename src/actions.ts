@@ -8,7 +8,7 @@ import { placeLabel } from "./model/labelPlace";
 import { componentAt, components, componentStyles, withPartStyle } from "./model/parts";
 import { sceneToPicture, sceneToTikz, tikzToScene } from "./tikz/export";
 import { cancelDraft, lastPick, selectionBox } from "./tools/controller";
-import { askText, store, TRUE_ZOOM, type ToolName } from "./store";
+import { askChoice, askText, store, TRUE_ZOOM, type ToolName } from "./store";
 import { labelBox } from "./labels/render";
 import { followRef } from "./smartLabels";
 import { freshCopies, nextNumbered } from "./model/copies";
@@ -224,15 +224,76 @@ export async function saveAndHide() {
   (window.tikzApi as any)?.hide?.();
 }
 
-/** A figure sent from outside (VS Code / the command line). */
+/** A figure sent from outside (VS Code / the command line): in its own tab. */
 export async function openFromOutside(path: string) {
+  await openInTab(path);
+}
+
+// ---------------------------------------------------------------- tabs
+
+const emptyDoc = () => ({ scene: emptyScene(), filePath: null, dirty: false, view: { cx: 0, cy: 0, zoom: TRUE_ZOOM * 1.5 }, selection: [], guideCx: 0 });
+
+/** The current tab holds nothing yet (a new figure can go in it). */
+const blankTab = () => {
   const s = store.get();
-  if (s.filePath === path) return;
-  if (s.dirty) {
-    if (s.filePath) await save();
-    else if (!window.confirm("Discard the unsaved figure?")) return;
-  }
+  return !s.filePath && !s.dirty && s.scene.objects.length === 0;
+};
+
+/** ⌘T: a new tab with an empty figure. */
+export function newTab() {
+  cancelDraft();
+  store.addTab(emptyDoc());
+}
+
+export function switchTab(id: string) {
+  cancelDraft();
+  store.switchTab(id);
+}
+
+/** The next tab to the right (or left), round the end. */
+export function nextTab(dir: 1 | -1) {
+  const { tabs, activeTab } = store.get();
+  switchTab(tabs[(tabs.indexOf(activeTab) + dir + tabs.length) % tabs.length]);
+}
+
+/** Open a file in a tab: its own tab if it's open already, else this one
+ *  when it's blank, else a new one. */
+export async function openInTab(path: string) {
+  const s = store.get();
+  const open = s.tabs.find((t) => store.doc(t)?.filePath === path);
+  if (open) return switchTab(open);
+  if (!blankTab()) newTab();
   await openPath(path);
+}
+
+const tabName = (d: { filePath: string | null }) => (d.filePath ? d.filePath.split(/[\\/]/).pop()! : "Untitled");
+
+/** ⌘W: close a tab, asking to save it first if it has changes. False:
+ *  cancelled. */
+export async function closeTab(id = store.get().activeTab): Promise<boolean> {
+  const d = store.doc(id);
+  if (!d) return true;
+  if (d.dirty) {
+    switchTab(id);
+    const a = await askChoice(`Save changes to ${tabName(d)}?`, "Your changes will be lost if you don't save them.", [
+      { label: "Don't save", value: "discard" },
+      { label: "Cancel", value: "cancel" },
+      { label: "Save", value: "save", primary: true },
+    ]);
+    if (a === "save") {
+      await save();
+      if (store.get().dirty) return false; // not saved (cancelled or failed)
+    } else if (a !== "discard") return false;
+  }
+  cancelDraft();
+  store.removeTab(id, emptyDoc);
+  return true;
+}
+
+/** Closing the window: each tab with changes asks first. */
+export async function closeWindow() {
+  for (const id of [...store.get().tabs]) if (store.doc(id)?.dirty && !(await closeTab(id))) return;
+  (window.tikzApi as any)?.closeWindow?.();
 }
 
 export async function save(saveAs = false) {
@@ -271,16 +332,16 @@ export async function openPath(path: string) {
   store.set({ scene, filePath: path, dirty: false, selection: [], editingLabel: null, pointEdit: null, guideCx: b ? (b.minX + b.maxX) / 2 : 0 });
 }
 
+/** ⌘O: open a figure (in a new tab unless this one is blank). */
 export async function open() {
-  if (store.get().dirty && !window.confirm("Discard unsaved changes?")) return;
   const path = await askPath("open", store.get().filePath ?? "graphics/");
-  if (path) await openPath(path);
+  if (path) await openInTab(path);
 }
 
+/** ⌘N: a new figure, in a new tab. */
 export function newFigure() {
-  if (store.get().dirty && !window.confirm("Discard unsaved changes?")) return;
-  store.resetHistory();
-  store.set({ scene: emptyScene(), filePath: null, dirty: false, selection: [], editingLabel: null, pointEdit: null, guideCx: 0 });
+  if (blankTab()) return;
+  newTab();
 }
 
 export async function saveSettings(settings: Settings) {

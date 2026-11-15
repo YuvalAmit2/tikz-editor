@@ -63,7 +63,7 @@ test("the library works in the app (in-app name prompt)", async () => {
   await expect(page.getByTestId("library-item")).toHaveCount(1);
 });
 
-test("a second launch opens its figure in the running window (saving the current one)", async () => {
+test("a second launch opens its figure in a new tab (the first stays open)", async () => {
   await page.keyboard.press("Escape");
   await page.keyboard.press("l");
   await page.mouse.click(...(await at(-1, -1)));
@@ -73,9 +73,31 @@ test("a second launch opens its figure in the running window (saving the current
   const p = spawn(electronBin, [root, second], { env: { ...process.env, TIKZ_EDITOR_HOME: home }, stdio: "ignore" });
   await new Promise((r) => p.on("exit", r));
   await expect.poll(() => st<string>("s.filePath"), { timeout: 15_000 }).toBe(second);
-  // The first figure was saved before switching
-  const first = readFileSync(path.join(work, "graphics/first.tikz"), "utf8");
-  expect(first).toMatch(/\\path\[draw\] \(-1,-1\) -- \(1,-1\);/);
+  expect(await st<number>("s.tabs.length")).toBe(2);
+  await expect(page.getByTestId("tab")).toHaveCount(2);
+  // The first figure is still there, with its changes, in the first tab.
+  await page.getByTestId("tab").first().click();
+  expect(await st<string>("s.filePath")).toBe(path.join(work, "graphics/first.tikz"));
+  expect(await st<boolean>("s.dirty")).toBe(true);
+  await page.keyboard.press("Meta+s");
+  await expect.poll(() => readFileSync(path.join(work, "graphics/first.tikz"), "utf8")).toMatch(/\\path\[draw\] \(-1,-1\) -- \(1,-1\);/);
+  await page.getByTestId("tab").nth(1).click();
+});
+
+/** Click an item of the app's File menu. */
+const fileMenu = (label: string) =>
+  app.evaluate(({ Menu }, label) => {
+    const file = Menu.getApplicationMenu()!.items.find((i) => i.label === "File")!;
+    (file.submenu!.items.find((i) => i.label === label)!.click as any)();
+  }, label);
+
+test("File → New Tab and Close Tab (⌘T, ⌘W)", async () => {
+  await fileMenu("New Tab");
+  await expect(page.getByTestId("tab")).toHaveCount(3);
+  expect(await st<string | null>("s.filePath")).toBeNull();
+  await fileMenu("Close Tab");
+  await expect(page.getByTestId("tab")).toHaveCount(2);
+  expect(await st<string>("s.filePath")).toBe(path.join(work, "graphics/second.tikz"));
 });
 
 test("⌘Enter saves and hides the window", async () => {
@@ -84,4 +106,20 @@ test("⌘Enter saves and hides the window", async () => {
   await page.keyboard.press("Meta+Enter");
   await expect.poll(() => existsSync(path.join(work, "graphics/second.tikz"))).toBe(true);
   await expect.poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible())).toBe(false);
+});
+
+test("closing the window asks about a tab with changes", async () => {
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].show());
+  await page.keyboard.press("d");
+  await page.mouse.click(...(await at(1, 1)));
+  expect(await st<boolean>("s.dirty")).toBe(true);
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0].close();
+  });
+  await expect(page.getByTestId("choice")).toBeVisible();
+  // Cancel: the window stays.
+  await page.getByTestId("choice-cancel").click();
+  expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1);
+  await page.keyboard.press("Meta+s");
+  await expect.poll(() => st<boolean>("s.dirty")).toBe(false);
 });

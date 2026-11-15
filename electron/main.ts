@@ -1,5 +1,5 @@
 // Electron main process: one window, the backend API over IPC.
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, type MenuItemConstructorOptions } from "electron";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { createApi } from "../server/api.ts";
@@ -23,6 +23,31 @@ function returnFromArgv(argv: string[]): string | null {
 let returnTo: string | null = returnFromArgv(process.argv);
 
 let win: BrowserWindow | null = null;
+/** Set once the page has dealt with its tabs' changes: the window may close. */
+let mayClose = false;
+
+/** The menu: the usual ones, with File → New Tab (⌘T) and Close Tab (⌘W)
+ *  handled by the page (which asks about unsaved changes). */
+function setMenu() {
+  const send = (what: string) => () => win?.webContents.send("menu", what);
+  const template: MenuItemConstructorOptions[] = [
+    ...(process.platform === "darwin" ? [{ role: "appMenu" as const }] : []),
+    {
+      label: "File",
+      submenu: [
+        { label: "New Tab", accelerator: "CmdOrCtrl+T", click: send("new-tab") },
+        { label: "Close Tab", accelerator: "CmdOrCtrl+W", click: send("close-tab") },
+        { type: "separator" },
+        { label: "Next Tab", accelerator: "Ctrl+Tab", click: send("next-tab") },
+        { label: "Previous Tab", accelerator: "Ctrl+Shift+Tab", click: send("prev-tab") },
+      ],
+    },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 async function createWindow() {
   win = new BrowserWindow({
@@ -35,6 +60,12 @@ async function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+  // The close button: the page asks about each tab with changes first.
+  win.on("close", (e) => {
+    if (mayClose) return;
+    e.preventDefault();
+    win?.webContents.send("menu", "close-window");
   });
   if (devUrl) await win.loadURL(devUrl);
   else await win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
@@ -86,6 +117,11 @@ if (!app.requestSingleInstanceLock()) {
       }
       else win?.minimize();
     });
+    ipcMain.on("close-window", () => {
+      mayClose = true;
+      win?.close();
+    });
+    setMenu();
     await createWindow();
   });
 

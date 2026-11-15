@@ -91,7 +91,7 @@ Status (2026-11-15): all planned features are built: shapes, curves with auto-sm
 ## VS Code integration
 
 - yalatex extension command, **Ctrl+⌘F** in .tex files (Inkscape's key, as this replaces Inkscape): the current line's text names the figure; the line becomes `\tikzfig{name}` and `bin/tikz-editor graphics/name.tikz` runs. On a line with `\tikzfig{name}` it reopens that figure.
-- In the editor, **⌘Enter** saves and hides the window (focus returns to VS Code); the app keeps running so the next figure opens instantly. A second launch passes its file to the running window (saving the current figure first).
+- In the editor, **⌘Enter** saves and hides the window (focus returns to VS Code); the app keeps running so the next figure opens instantly. A second launch passes its file to the running window, which opens it in a new tab (or switches to it if it is already open).
 
 ## Testing
 

@@ -45,10 +45,12 @@ test("labels: click selects and arrows move it; double-click edits; arrows then 
   let s = await st(page);
   expect(s.selection).toHaveLength(1);
   expect(s.editingLabel).toBeNull();
+  // (Text tool labels: the text is centred on the point, inkAt; TikZ's
+  // node point p is beside it.)
   await page.keyboard.press("ArrowRight");
-  expect((await objs(page))[0].p.x).toBeCloseTo(0.25, 9);
+  expect((await objs(page))[0].inkAt.x).toBeCloseTo(0.25, 9);
   await page.keyboard.press("Alt+ArrowRight");
-  expect((await objs(page))[0].p.x).toBeCloseTo(0.3, 9);
+  expect((await objs(page))[0].inkAt.x).toBeCloseTo(0.3, 9);
   // Double click: editing; arrows move the text cursor, not the label
   await page.mouse.dblclick(...(await at(page, 0.3, 0)));
   s = await st(page);
@@ -58,7 +60,7 @@ test("labels: click selects and arrows move it; double-click edits; arrows then 
   await page.keyboard.press("Enter");
   const o = (await objs(page))[0];
   expect(o.text).toBe("yx");
-  expect(o.p.x).toBeCloseTo(0.3, 9);
+  expect(o.inkAt.x).toBeCloseTo(0.3, 9);
 });
 
 test("keys: Space taps to Select, - and . toggle dashes, G toggles grid snapping", async ({ page }) => {

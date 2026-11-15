@@ -4,7 +4,7 @@ import type { Box } from "./model/geometry";
 import { DEFAULT_SETTINGS, type Settings } from "./model/settings";
 import type { SnapResult } from "./model/snap";
 import type { Guide } from "./model/guides";
-import { DEFAULT_STYLE, emptyScene, type Obj, type Scene, type Style } from "./model/types";
+import { DEFAULT_STYLE, emptyScene, newId, type Obj, type Scene, type Style } from "./model/types";
 
 export type ToolName = "select" | "line" | "polyline" | "curve" | "sketch" | "rect" | "circle" | "ellipse" | "fill" | "point" | "text" | "trim";
 
@@ -71,9 +71,29 @@ export interface AppState {
   lineKind: "line" | "brace";
   /** The Line tool's menu is open. */
   lineMenu: boolean;
+  /** Open figures (tabs), in order; the active one is in the fields above. */
+  tabs: string[];
+  activeTab: string;
+  /** A question with a few answers (in-app: e.g. "Save changes?"). */
+  choice: { title: string; message?: string; buttons: { label: string; value: string; primary?: boolean }[]; resolve: (v: string | null) => void } | null;
+}
+
+/** A figure in a tab that isn't showing: what it keeps while another one is. */
+export interface Doc {
+  scene: Scene;
+  filePath: string | null;
+  dirty: boolean;
+  view: View;
+  selection: string[];
+  guideCx: number;
+  undo: Scene[];
+  redo: Scene[];
 }
 
 type Listener = () => void;
+
+/** What's cleared when another figure is shown. */
+const TAB_RESET: Partial<AppState> = { editingLabel: null, pointEdit: null, activeNode: null, preview: [], marquee: null, snap: null, pieceSel: null, pieceHover: null, menu: null, guides: [], insertHint: null };
 
 class Store {
   state: AppState = {
@@ -108,6 +128,9 @@ class Store {
     snapMenu: false,
     lineKind: "line",
     lineMenu: false,
+    tabs: ["t0"],
+    activeTab: "t0",
+    choice: null,
   };
   private listeners = new Set<Listener>();
   private undoStack: Scene[] = [];
@@ -166,6 +189,56 @@ class Store {
     this.redoStack = [];
   }
 
+  // ---- tabs ----
+  /** The figures in the other tabs. */
+  private docs = new Map<string, Doc>();
+
+  /** A tab's figure (the active one from the current state). */
+  doc(id: string): Doc | null {
+    const s = this.state;
+    if (id === s.activeTab) return { scene: s.scene, filePath: s.filePath, dirty: s.dirty, view: s.view, selection: s.selection, guideCx: s.guideCx, undo: this.undoStack, redo: this.redoStack };
+    return this.docs.get(id) ?? null;
+  }
+
+  /** Show another tab's figure (the current one is put aside, undo and all). */
+  switchTab(id: string) {
+    const s = this.state;
+    if (id === s.activeTab || !this.docs.has(id)) return;
+    this.docs.set(s.activeTab, this.doc(s.activeTab)!);
+    const d = this.docs.get(id)!;
+    this.docs.delete(id);
+    this.undoStack = d.undo;
+    this.redoStack = d.redo;
+    this.set({ activeTab: id, scene: d.scene, filePath: d.filePath, dirty: d.dirty, view: d.view, selection: d.selection, guideCx: d.guideCx, ...TAB_RESET });
+  }
+
+  /** A new tab after the current one, showing this figure. */
+  addTab(d: Omit<Doc, "undo" | "redo">): string {
+    const id = "t" + newId();
+    const s = this.state;
+    const i = s.tabs.indexOf(s.activeTab);
+    this.docs.set(id, { ...d, undo: [], redo: [] });
+    this.set({ tabs: [...s.tabs.slice(0, i + 1), id, ...s.tabs.slice(i + 1)] });
+    this.switchTab(id);
+    return id;
+  }
+
+  /** Close a tab (no questions asked); the last one becomes an empty figure. */
+  removeTab(id: string, empty: () => Omit<Doc, "undo" | "redo">) {
+    const s = this.state;
+    if (s.tabs.length === 1) {
+      const d = empty();
+      this.resetHistory();
+      this.set({ scene: d.scene, filePath: d.filePath, dirty: false, view: d.view, selection: [], guideCx: d.guideCx, ...TAB_RESET });
+      return;
+    }
+    const i = s.tabs.indexOf(id);
+    const tabs = s.tabs.filter((t) => t !== id);
+    if (id === s.activeTab) this.switchTab(tabs[Math.min(i, tabs.length - 1)]);
+    this.docs.delete(id);
+    this.set({ tabs });
+  }
+
   // ---- scene helpers ----
   objById(id: string): Obj | undefined {
     return this.state.scene.objects.find((o) => o.id === id);
@@ -221,4 +294,21 @@ export function withGroups(ids: string[], objects: Obj[] = store.get().scene.obj
   const groups = new Set(objects.filter((o) => o.group && ids.includes(o.id)).map((o) => o.group));
   if (!groups.size) return ids;
   return [...new Set([...ids, ...objects.filter((o) => o.group && groups.has(o.group)).map((o) => o.id)])];
+}
+
+/** Ask a question with a few answers. Resolves the value, or null (Escape). */
+export function askChoice(title: string, message: string, buttons: { label: string; value: string; primary?: boolean }[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    store.set({
+      choice: {
+        title,
+        message,
+        buttons,
+        resolve: (v) => {
+          store.set({ choice: null });
+          resolve(v);
+        },
+      },
+    });
+  });
 }

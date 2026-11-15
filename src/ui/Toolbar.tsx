@@ -42,10 +42,7 @@ export function toolKey(t: { tool: ToolName; key: string }): string {
 
 export function Toolbar() {
   const tool = useStore((s) => s.tool);
-  const filePath = useStore((s) => s.filePath);
-  const dirty = useStore((s) => s.dirty);
   const hasSel = useStore((s) => s.selection.length > 0);
-  const name = filePath ? filePath.split(/[\\/]/).pop() : "Untitled";
   return (
     <div className="toolbar">
       <div className="group">
@@ -88,10 +85,6 @@ export function Toolbar() {
         <SnapMenu />
       </div>
       <div className="spacer" />
-      <div className="filename" title={filePath ?? "Not saved yet"}>
-        {name}
-        {dirty ? " •" : ""}
-      </div>
       <div className="group files">
         <button className="text-btn" title="New figure (⌘N)" onClick={newFigure}>New</button>
         <button className="text-btn" title="Open (⌘O)" onClick={open}>Open</button>

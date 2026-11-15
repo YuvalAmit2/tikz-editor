@@ -51,8 +51,8 @@ On a line of its own a figure is centred. Sizes scale the drawing only; labels k
 | | |
 |---|---|
 | Space (tap) or V | Select |
-| L P B S R E D T F X | Line, Polyline, Curve, Sketch, Rectangle, Ellipse (⇧: circle), Dot, Text, Fill (paint bucket), Trim |
-| - . _ | Dashed, dotted (again: solid), solid |
+| L P B S R E D T F X | Line (its menu, the arrow beside it: line or curly brace), Polyline, Curve, Sketch, Rectangle, Ellipse (⇧: circle), Dot, Text, Fill (paint bucket), Trim |
+| - . _ | Dashed, dotted (again: solid), solid (also takes a wave off) |
 | G | Grid snapping on/off |
 | ⇧T | Label the selection (placed next to it, clear of other lines; next to the edge or the part of a line you clicked) |
 | 1–7 | Line thickness (ultra thin … ultra thick) |
@@ -64,7 +64,7 @@ On a line of its own a figure is centred. Sizes scale the drawing only; labels k
 | …while editing points | ↵: add a point at the dot shown on the line under the mouse; double-click an anchor: smooth ↔ corner; ⌫: delete the last clicked point; Alt-drag a handle: move it alone; ⇧-drag: the mirror-image point moves too |
 | Selection box | Corners and edges scale (⇧: about the centre, ⌘: keep proportions); the knob above rotates (⇧: 15° steps). A corner or edge handle on one of a curve's points is a circle: dragging it moves just that point (snapping onto other objects); the rest of the curve stays |
 | While drawing a curve or polyline | ⌘Z takes back the last click, ⌫ drops the whole thing |
-| Right-click | Menu: front/back, forward/backward, label, copy, duplicate, flip, library, delete |
+| Right-click | Menu: front/back, forward/backward, Show height (two crossing lines), label, copy, duplicate, flip, library, delete |
 | ⇧H ⇧V ⇧R | Flip horizontally / vertically, rotate 90° |
 | Arrow keys | Nudge by about 15 screen px in grid steps (finer when zoomed in; Shift: four, Alt: a fifth) |
 | ⌘Z ⇧⌘Z ⌘C ⌘V ⌘D ⌘A | Undo, redo, copy, paste, duplicate, select all. ⌘D on a copy you just moved repeats the move (⌘D, drag, ⌘D ⌘D … for evenly spaced copies), and counts subscripts up (a_1, a_2, …) |
@@ -72,37 +72,45 @@ On a line of its own a figure is centred. Sizes scale the drawing only; labels k
 | ⌘G, ⇧⌘G | Group, ungroup (grouped objects are selected and moved together) |
 | ⇧⌘H | Hide or show (hidden objects are faint here and left out of the TikZ; on a curve with text, only its line hides) |
 | ⌘K | Command palette (every command and library figure) |
-| ⌘S ⌘O ⌘N ⌘, | Save, open, new, settings |
+| ⌘S ⌘O ⌘, | Save, open (in a new tab), settings |
+| ⌘T (⌘N) ⌘W ⌃Tab | New tab, close tab (asks to save), next tab (⌃⇧Tab: previous) |
+| 1–9, 0 (library open) | Insert the first ten library figures at the mouse |
 | ⌘Enter | Save and go back (hides the window) |
 | Space-drag, two-finger scroll | Pan |
 | Pinch, ⌘-scroll, ⌘= ⌘- | Zoom |
-| ⌘0 / ⇧1 | True size / fit figure |
+| ⌘0 / ⇧1 | True size / fit figure (a "Back to the drawing" button shows when it's out of sight) |
 
 Tool keys can be changed with `"toolKeys": { "curve": "K" }` in `settings.json` (in `~/Library/Application Support/tikz-editor/`).
 
 In the text panel: labels are **math by default** (`\cO_K`), but a label containing `$…$` is text (`Consider $\cO_K$`). ⌘T forces text mode. Enter finishes, Shift+Enter starts a new line. Your VS Code snippets (yalatex's `vscode/latex.json`) work as in VS Code: type the all-caps prefix, then Enter or Tab (a second Enter finishes the label).
 
-**Trim (X):** click a piece of a shape to cut it away up to where it crosses other lines, or drag across several pieces. To cut an ellipse in half, draw a line across it, trim one half, delete the line.
+**Trim (X):** click a piece of a shape to cut it away up to where it crosses other lines, or drag across several pieces. The sides of rectangles, polygons and polylines go one at a time. To cut an ellipse in half, draw a line across it, trim one half, delete the line.
+
+**Paint bucket (F):** click inside a region bounded by any lines to fill it. Shapes inside it are left as holes (a ring between two circles, a disc with punctures); loops in one curve and shapes that touch count too.
 
 **Pieces:** to style part of a shape (e.g. the hidden half of a sphere's equator dashed), select it and open **Pieces** in the style panel. It lists the stretches between where other lines cross it, each drawn as a small picture; hovering one highlights it. Pick one or more, and the stroke colour, thickness and dash (including the `-` and `.` keys) apply to just those. **whole** goes back to styling the whole shape. A styled piece follows the crossings when things move, and stays a piece if the line that cut it is deleted.
 
 **Copy** gives a `tikzpicture` you can paste straight into a document. To keep editing a figure, save it as a `.tikz` file and insert it with `\tikzfig{name}` instead (the command palette also copies the `.tikz` contents or the `\tikzfig` line).
 
-**Labels made with the Label button** (⇧T) stay with what they label. A label's outline fits its visible text, and labels are placed, picked and lined up by that box (the TikZ node keeps its usual padding, so the PDF is unchanged). In the style panel, "Keeps clear of lines" decides whether they find a new spot when it moves or just move along with it.
+**Labels made with the Label button** (⇧T) stay with what they label, and are deleted, copied and duplicated with it. Text made with the Text tool is centred on the point you clicked. A label's outline fits its visible text, and labels are placed, picked and lined up by that box (the TikZ node keeps its usual padding, so the PDF is unchanged). In the style panel, "Keeps clear of lines" decides whether they find a new spot when it moves or just move along with it.
 
 **Text along a curve:** select an open curve and type into "Text along the curve" in the style panel; the curve is replaced by the text (TikZ's `decorations.text`, which `tikzfig.sty` loads; pasted pictures need `\usetikzlibrary{decorations.text}`).
 
-**Arrows in the middle** (style panel): one or two arrowheads in the middle of each straight edge, or halfway along a curve or ellipse, for identification diagrams (a torus as a square with marked edges) and contours.
+**Arrows** (style panel): the first row is arrowheads at the ends; the second puts one or two in the middle of each straight edge, or halfway along a curve or ellipse, for identification diagrams (a torus as a square with marked edges) and contours.
 
 **Plot a function** (⌘K): type `y =` something, like `x^3/3 - x` or `sin(2x), -pi, pi` (the range of x is optional; by default the width of the view). It becomes an ordinary curve that follows the graph closely, split where the function is undefined or jumps (`1/x`, `tan x`). Also in ⌘K: **Regular polygon…**, and **Blend**: select two lines, curves or shapes and get any number evenly in between (families of curves, homotopies, level sets).
 
 **Dots hold their lines:** moving a dot (dragging, arrow keys, flipping) moves the line ends, corners and curve points that were on it, so graphs and triangulations stay joined. ⌘-drag moves a dot alone.
 
-**Wavy, zigzag and coiled lines, braces** (second row under Dash): for branch cuts, photon and gluon lines, springs; a curly brace goes from a line's first point to its last, on its left (flip it, ⇧H/⇧V, for the other side). A whole number of waves fits the line so its ends stay put; they're written as coordinates, so the PDF looks exactly like the editor.
+**Wavy, zigzag and coiled lines** (under Line, with solid, dashed and dotted): a whole number of waves fits the line so its ends stay put. **Curly braces** come from the Line tool's menu: a brace goes from the first point to the last, on its left (flip it, ⇧H/⇧V, for the other side), and ⇧T labels its tip. Both are written as coordinates, so the PDF looks exactly like the editor.
 
 **See-through fills** (Fill, "See-through") let overlapping shapes show both colours, as in Venn diagrams. A label's **White background** lets it sit on a line.
 
-**Crossings** (knots, braids, a curve passing in front of a surface): tick "Gap where it crosses lines below" on the line that goes over; it's drawn over a wider white line, so the lines below it are broken where it crosses them. It must be in front (⌘]).
+**Show height** (knots, braids, a curve passing in front of a surface): select two lines that cross, right-click, Show height. The one in front goes over: the one behind gets a gap where they cross (its fill stays whole). ⌘] / ⌘[ swap which is on top; the menu item again turns it off.
+
+**Library:** click a figure to insert it, or press its number (1–9, 0) to put it at the mouse. Drag figures to reorder them; right-click one to rename it or insert it at half or twice its size.
+
+**Tabs:** each open figure has a tab. A figure sent from VS Code opens in a new tab (or its own, if it's already open).
 
 **Hatched fills:** pick a pattern under Fill; the strength buttons (15%–100%) then set how dense the hatching is, not how pale (100% is TikZ's own pattern; lighter ones use `patterns.meta`, which `tikzfig.sty` loads).
 
