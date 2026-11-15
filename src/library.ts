@@ -9,6 +9,7 @@ import { snapGrid } from "./model/snap";
 import type { Obj } from "./model/types";
 import { xcolorCss } from "./model/xcolor";
 import { freshCopies } from "./model/copies";
+import { waved } from "./model/wave";
 import { askText, store } from "./store";
 
 export interface LibraryItem {
@@ -103,9 +104,11 @@ export function thumbnailSvg(objs: Obj[]): string {
   const stroke = (o: Obj) => {
     const st = o.style;
     const sw = Math.max(1, st.width * 2.2);
-    return `stroke="${st.stroke ? xcolorCss(st.stroke) : "none"}" stroke-width="${sw}" vector-effect="non-scaling-stroke" fill="${st.fill ? xcolorCss(st.fill) : "none"}"${st.dash === "dashed" ? ' stroke-dasharray="4 3"' : st.dash === "dotted" ? ' stroke-dasharray="1 2.5"' : ""}`;
+    return `stroke="${st.stroke ? xcolorCss(st.stroke) : "none"}" stroke-width="${sw}" vector-effect="non-scaling-stroke" fill="${st.fill ? xcolorCss(st.fill) : "none"}"${st.fill && st.opacity !== undefined && st.opacity < 1 ? ` fill-opacity="${st.opacity}"` : ""}${st.dash === "dashed" ? ' stroke-dasharray="4 3"' : st.dash === "dotted" ? ' stroke-dasharray="1 2.5"' : ""}`;
   };
-  for (const o of objs) {
+  for (const orig of objs) {
+    // Waves and braces as the line they draw.
+    const o: Obj = (!orig.parts?.length && waved(orig)) || orig;
     switch (o.type) {
       case "path":
         parts.push(`<path d="${o.pts.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ")}${o.closed ? " Z" : ""}" ${stroke(o)}/>`);
