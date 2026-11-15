@@ -6,8 +6,9 @@ import { getLabel, labelBox, labelImage, labelNodeBox } from "./labels/render";
 import { curvePathD } from "./model/curve";
 import { geomBox, ptToCm, transformObj, translation, unionBox, type Box } from "./model/geometry";
 import { snapGrid } from "./model/snap";
-import { newId, type Obj } from "./model/types";
+import type { Obj } from "./model/types";
 import { xcolorCss } from "./model/xcolor";
+import { freshCopies } from "./model/copies";
 import { askText, store } from "./store";
 
 export interface LibraryItem {
@@ -82,7 +83,7 @@ export function insertLibraryItem(item: LibraryItem, where?: { x: number; y: num
   const c = where ?? { x: s.view.cx, y: s.view.cy };
   const at = s.settings.snapToGrid ? snapGrid(c, s.settings.gridSize) : c;
   const m = translation(at.x, at.y);
-  const copies = item.objects.map((o) => ({ ...transformObj(o, m), id: newId() }));
+  const copies = freshCopies(item.objects, m);
   store.commit({ ...s.scene, objects: [...s.scene.objects, ...copies] }, { selection: copies.map((o) => o.id), tool: "select", pointEdit: null, editingLabel: null });
 }
 

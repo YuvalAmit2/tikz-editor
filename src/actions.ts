@@ -11,6 +11,7 @@ import { cancelDraft, selectionBox } from "./tools/controller";
 import { askText, store, TRUE_ZOOM, type ToolName } from "./store";
 import { labelBox } from "./labels/render";
 import { followRef } from "./smartLabels";
+import { freshCopies } from "./model/copies";
 
 export function setTool(tool: ToolName) {
   cancelDraft();
@@ -74,8 +75,8 @@ function pasteOffset(): number {
   return Math.min(2 * g, g * Math.pow(2, Math.round(Math.log2(20 / (g * view.zoom)))));
 }
 
-function pasteObjs(objs: Obj[], offset: number) {
-  if (objs.length === 0) return;
+function pasteObjs(objs: Obj[], offset: number): Obj[] {
+  if (objs.length === 0) return [];
   const s = store.get();
   let m = translation(offset, -offset);
   // Off screen (e.g. zoomed in elsewhere): put it in the middle of the view.
@@ -88,16 +89,51 @@ function pasteObjs(objs: Obj[], offset: number) {
     const seen = b.maxX > view.minX && b.minX < view.maxX && b.maxY > view.minY && b.minY < view.maxY;
     if (!seen) m = translation(v.cx - (b.minX + b.maxX) / 2 + offset, v.cy - (b.minY + b.maxY) / 2 - offset);
   }
-  const copies = objs.map((o) => ({ ...transformObj(o, m), id: newId() }));
+  return addCopies(objs, m);
+}
+
+function addCopies(objs: Obj[], m: ReturnType<typeof translation>): Obj[] {
+  const s = store.get();
+  const copies = freshCopies(objs, m);
   store.commit({ ...s.scene, objects: [...s.scene.objects, ...copies] }, { selection: copies.map((o) => o.id), tool: "select" });
+  return copies;
 }
 
 export function paste() {
   pasteObjs(clipboard, pasteOffset());
 }
 
+/** The last duplicate: what was copied and the copies. */
+let lastDup: { src: string[]; copies: string[] } | null = null;
+
+/** ⌘D. Duplicating the copy you just made (after moving it) repeats that
+ *  move: ⌘D, drag the copy into place, then ⌘D ⌘D … gives evenly spaced copies. */
 export function duplicate() {
-  pasteObjs(store.selected(), pasteOffset());
+  const sel = store.selected();
+  if (!sel.length) return;
+  const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+  if (lastDup && same(sel.map((o) => o.id), lastDup.copies)) {
+    const src = lastDup.src.map((id) => store.objById(id)).filter((o): o is Obj => !!o);
+    const bs = boxOfAll(src);
+    const bc = boxOfAll(sel);
+    if (src.length === lastDup.src.length && bs && bc) {
+      const dx = (bc.minX + bc.maxX - bs.minX - bs.maxX) / 2;
+      const dy = (bc.minY + bc.maxY - bs.minY - bs.maxY) / 2;
+      if (Math.hypot(dx, dy) > 1e-9) {
+        const copies = addCopies(sel, translation(dx, dy));
+        lastDup = { src: sel.map((o) => o.id), copies: copies.map((o) => o.id) };
+        return;
+      }
+    }
+  }
+  const copies = pasteObjs(sel, pasteOffset());
+  lastDup = { src: sel.map((o) => o.id), copies: copies.map((o) => o.id) };
+}
+
+function boxOfAll(objs: Obj[]): Box | null {
+  let b: Box | null = null;
+  for (const o of objs) b = unionBox(b, objBox(o));
+  return b;
 }
 
 function transformSelection(make: (b: Box) => ReturnType<typeof scalingAbout>) {
