@@ -65,6 +65,9 @@ async function createWindow() {
   win.on("close", (e) => {
     if (mayClose) return;
     e.preventDefault();
+    // Shown first: it may ask about unsaved changes (e.g. ⌘Q while hidden).
+    if (process.platform === "darwin") app.show();
+    win?.show();
     win?.webContents.send("menu", "close-window");
   });
   if (devUrl) await win.loadURL(devUrl);
