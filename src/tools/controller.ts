@@ -611,6 +611,9 @@ export function onPointerDown(e: PEvent) {
   }
 }
 
+/** Where the last object was clicked (⇧T labels the part clicked). */
+export let lastPick: { id: string; p: Vec } | null = null;
+
 function selectDown(e: PEvent) {
   const s = store.get();
   const h = handleAt(e);
@@ -658,6 +661,7 @@ function selectDown(e: PEvent) {
   }
   // A click selects (and lets you drag); a double-click edits a label's text.
   store.set({ selection, editingLabel: null });
+  lastPick = { id: hit.id, p: e.world };
   if (!selection.includes(hit.id)) return;
   // Grab point: the nearest special point of the grabbed object, so that
   // snapping moves that point onto targets (e.g. a vertex onto a vertex).

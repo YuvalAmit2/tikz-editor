@@ -22,7 +22,8 @@ function update() {
       done.push(rest);
       continue;
     }
-    const { p, anchor } = placeLabel(targets, s.scene.objects, labelInkSize(o)!, labelBox, [o.id]);
+    // Near where it was first put (by the side of the object that was clicked).
+    const { p, anchor } = placeLabel(targets, s.scene.objects, labelInkSize(o)!, labelBox, [o.id], centreOf(o));
     done.push({ ...rest, p: nodePointForInk(o, p, anchor), anchor });
   }
   // Not an undo step of its own: part of creating the label.
@@ -66,7 +67,7 @@ export function followLabels(scene: Scene, prev: Scene | null, final: boolean): 
     if (final && o.follow.avoid && size && !o.attach && !byHand) {
       const b = labelBox(next);
       if (b && labelCrossesLines(b, scene.objects, [o.id])) {
-        const { p, anchor } = placeLabel(targets, scene.objects, size, labelBox, [o.id]);
+        const { p, anchor } = placeLabel(targets, scene.objects, size, labelBox, [o.id], centreOf(next));
         next = { ...next, p: nodePointForInk(o, p, anchor), anchor };
       }
     }
@@ -90,3 +91,9 @@ export function initSmartLabels() {
   });
 }
 let lastEditing: string | null = null;
+
+/** The middle of a label's text (its anchor point before it's compiled). */
+function centreOf(o: LabelObj): Vec {
+  const b = labelBox(o);
+  return b ? { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 } : o.p;
+}

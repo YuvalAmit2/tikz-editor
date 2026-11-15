@@ -7,7 +7,7 @@ import { emptyScene, newId, type Dash, type LabelObj, type Obj, type Style } fro
 import { placeLabel } from "./model/labelPlace";
 import { componentAt, components, componentStyles, withPartStyle } from "./model/parts";
 import { sceneToPicture, sceneToTikz, tikzToScene } from "./tikz/export";
-import { cancelDraft, selectionBox } from "./tools/controller";
+import { cancelDraft, lastPick, selectionBox } from "./tools/controller";
 import { askText, store, TRUE_ZOOM, type ToolName } from "./store";
 import { labelBox } from "./labels/render";
 import { followRef } from "./smartLabels";
@@ -368,7 +368,9 @@ export function smartLabel() {
   const font = targets.length > 1 ? "\\large" : "";
   const others = s.scene.objects;
   const est = { w: 0.3, h: 0.3 }; // the text's box; placed again once compiled
-  const { p, anchor } = placeLabel(targets, others, est, labelBox);
+  // Near where the object was clicked (e.g. the edge of a square).
+  const near = targets.length === 1 && lastPick?.id === targets[0].id ? lastPick.p : undefined;
+  const { p, anchor } = placeLabel(targets, others, est, labelBox, [], near);
   const o: LabelObj = {
     id: newId(),
     type: "label",

@@ -77,7 +77,7 @@ function boxAt(p: Vec, anchor: Anchor, size: { w: number; h: number }): Box {
 
 const overlap = (a: Box, b: Box) => Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX)) * Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY));
 
-function candidates(targets: Obj[], gap: number): Candidate[] {
+function candidates(targets: Obj[], gap: number, near?: Vec): Candidate[] {
   const out: Candidate[] = [];
   let rank = 0;
   const around = (c: Vec, r: number) => {
@@ -156,6 +156,45 @@ function candidates(targets: Obj[], gap: number): Candidate[] {
     ];
     for (const [x, y, dx, dy] of spots) out.push({ p: { x, y }, anchor: anchorFor(dx, dy), rank: rank++ });
   }
+  // Spots on the object itself, last (they win when it was clicked there):
+  // outside the middle of a polygon's edges, beside the clicked point of a line.
+  if (targets.length === 1) {
+    const o = targets[0];
+    if (o.type === "path" && o.closed && o.pts.length >= 3) {
+      // Outside the middle of each edge (away from the middle of the shape).
+      const cen = o.pts.reduce((a, p) => ({ x: a.x + p.x / o.pts.length, y: a.y + p.y / o.pts.length }), { x: 0, y: 0 });
+      o.pts.forEach((a, i) => {
+        const e = o.pts[(i + 1) % o.pts.length];
+        const l = dist(a, e);
+        if (l < 1e-9) return;
+        const m = { x: (a.x + e.x) / 2, y: (a.y + e.y) / 2 };
+        let n = { x: -(e.y - a.y) / l, y: (e.x - a.x) / l };
+        if ((m.x - cen.x) * n.x + (m.y - cen.y) * n.y < 0) n = { x: -n.x, y: -n.y };
+        out.push({ p: { x: m.x + n.x * gap, y: m.y + n.y * gap }, anchor: anchorFor(n.x, n.y), rank: rank++ });
+      });
+    }
+    if (near && (o.type === "path" || o.type === "curve") && !o.closed) {
+      const pts = o.type === "path" ? o.pts : sampleCurve(o, 16);
+      let best: { m: Vec; n: Vec; d: number } | null = null;
+      for (let i = 0; i + 1 < pts.length; i++) {
+        const a = pts[i];
+        const e = pts[i + 1];
+        const l = dist(a, e);
+        if (l < 1e-9) continue;
+        const t = Math.max(0, Math.min(1, ((near.x - a.x) * (e.x - a.x) + (near.y - a.y) * (e.y - a.y)) / (l * l)));
+        const m = { x: a.x + (e.x - a.x) * t, y: a.y + (e.y - a.y) * t };
+        const d = dist(m, near);
+        if (!best || d < best.d) best = { m, n: { x: -(e.y - a.y) / l, y: (e.x - a.x) / l }, d };
+      }
+      // A box's corner can touch a sloping line: a little farther out too.
+      if (best)
+        for (const sgn of [1, -1])
+          for (const r of [gap, gap + 0.06, gap + 0.12]) {
+            const d = { x: best.n.x * sgn, y: best.n.y * sgn };
+            out.push({ p: { x: best.m.x + d.x * r, y: best.m.y + d.y * r }, anchor: anchorFor(d.x, d.y), rank: rank++ });
+          }
+    }
+  }
   return out;
 }
 
@@ -178,6 +217,7 @@ export function placeLabel(
   size: { w: number; h: number },
   labelBoxOf: (o: LabelObj) => Box | null,
   ignore: string[] = [],
+  near?: Vec,
 ): { p: Vec; anchor: Anchor } {
   // Between the text's box (which has 1pt of padding) and the line: about 1 mm in all.
   const gap = 0.07;
@@ -189,7 +229,7 @@ export function placeLabel(
   const pad = 0.04;
   let tb: Box | null = null;
   for (const t of targets) tb = unionBox(tb, geomBox(t));
-  for (const c of candidates(targets, gap)) {
+  for (const c of candidates(targets, gap, near)) {
     const b = boxAt(c.p, c.anchor, size);
     const padded = { minX: b.minX - pad, minY: b.minY - pad, maxX: b.maxX + pad, maxY: b.maxY + pad };
     let hits = 0;
@@ -198,7 +238,9 @@ export function placeLabel(
     for (const lb of labels) lab += overlap(padded, lb);
     // Labels for several objects shouldn't sit inside their box.
     const inside = targets.length > 1 && tb ? overlap(b, tb) / (size.w * size.h) : 0;
-    const score = hits * 10 + lab * 50 + inside * 5 + c.rank * 0.05;
+    // Clicked somewhere on the object: the spots nearest that come first.
+    const far = near ? Math.hypot((b.minX + b.maxX) / 2 - near.x, (b.minY + b.maxY) / 2 - near.y) : 0;
+    const score = hits * 10 + lab * 50 + inside * 5 + c.rank * 0.05 + far * 2;
     if (score < bestScore) {
       bestScore = score;
       best = c;
