@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { marksOf, marksTikz } from "../../src/model/marks";
 import { freshCopies } from "../../src/model/copies";
+import { withAttached } from "../../src/model/attach";
 import { translation } from "../../src/model/geometry";
 import { fmt, sceneToPicture, sceneToTikz } from "../../src/tikz/export";
 import { DEFAULT_STYLE, type Obj } from "../../src/model/types";
@@ -62,5 +63,21 @@ describe("gap where it crosses", () => {
     const white = t.indexOf("\\path[draw=white,line width=4.4pt] (0,0) -- (2,0) -- (2,2);");
     expect(white).toBeGreaterThan(0);
     expect(t.indexOf("\\path[draw] (0,0) -- (2,0) -- (2,2);")).toBeGreaterThan(white);
+  });
+});
+
+describe("lines follow their dots", () => {
+  it("moves line ends and curve anchors that were on a moved dot", () => {
+    const d: Obj = { id: "d", type: "point", style: DEFAULT_STYLE, p: { x: 2, y: 0 }, size: 1.5 };
+    const c: Obj = { id: "c", type: "curve", style: DEFAULT_STYLE, nodes: [{ p: { x: 0, y: 1 }, mode: "smooth" }, { p: { x: 2, y: 0 }, mode: "smooth" }], closed: false };
+    const moved: Obj = { ...d, p: { x: 3, y: 1 } };
+    const out = withAttached([d], [moved], [line(0), c, d]);
+    expect(out).toHaveLength(3);
+    const l = out.find((o) => o.id === "a")!;
+    expect(l.type === "path" && l.pts[1]).toEqual({ x: 3, y: 1 });
+    const cc = out.find((o) => o.id === "c")!;
+    expect(cc.type === "curve" && cc.nodes[1].p).toEqual({ x: 3, y: 1 });
+    // A dot elsewhere: nothing else moves.
+    expect(withAttached([{ ...d, p: { x: 5, y: 5 } }], [moved], [line(0), c])).toHaveLength(1);
   });
 });

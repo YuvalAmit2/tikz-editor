@@ -12,6 +12,7 @@ import { askText, store, TRUE_ZOOM, type ToolName } from "./store";
 import { labelBox } from "./labels/render";
 import { followRef } from "./smartLabels";
 import { freshCopies } from "./model/copies";
+import { withAttached } from "./model/attach";
 
 export function setTool(tool: ToolName) {
   cancelDraft();
@@ -141,7 +142,7 @@ function transformSelection(make: (b: Box) => ReturnType<typeof scalingAbout>) {
   const b = selectionBox();
   if (!b || sel.length === 0) return;
   const m = make(b);
-  store.commit(store.withReplaced(sel.map((o) => transformObj(o, m))));
+  store.commit(store.withReplaced(withAttached(sel, sel.map((o) => transformObj(o, m)), store.get().scene.objects)));
 }
 
 const centre = (b: Box) => ({ x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 });
@@ -153,7 +154,7 @@ export function nudge(dx: number, dy: number) {
   const sel = store.selected();
   if (sel.length === 0) return;
   const m = translation(dx, dy);
-  store.commit(store.withReplaced(sel.map((o) => transformObj(o, m))));
+  store.commit(store.withReplaced(withAttached(sel, sel.map((o) => transformObj(o, m)), store.get().scene.objects)));
 }
 
 // ---------------------------------------------------------------- view

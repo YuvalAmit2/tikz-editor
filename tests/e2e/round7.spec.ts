@@ -86,3 +86,32 @@ test("a line with a gap breaks the lines below it", async ({ page }) => {
   // A white line under b.
   await expect(page.locator('svg.canvas g[data-id="b"] path[stroke="rgb(255,255,255)"]')).toHaveCount(1);
 });
+
+test("dragging a dot brings the lines that end at it; ⌘-drag moves it alone", async ({ page }) => {
+  await setup(page);
+  await commit(page, [
+    { id: "d", type: "point", p: { x: 0, y: 1 }, size: 1.5 },
+    { id: "a", type: "path", pts: [{ x: -1, y: -1 }, { x: 0, y: 1 }, { x: 1, y: -1 }], closed: false },
+  ]);
+  await page.mouse.move(...(await at(page, 0, 1)));
+  await page.mouse.down();
+  await page.mouse.move(...(await at(page, 0.5, 1.6)), { steps: 6 });
+  await page.mouse.up();
+  let a = (await objs(page)).find((o: any) => o.id === "a");
+  const d = (await objs(page)).find((o: any) => o.id === "d");
+  expect(a.pts[1].x).toBeCloseTo(d.p.x, 9);
+  expect(a.pts[1].y).toBeCloseTo(d.p.y, 9);
+  expect(d.p.x).toBeGreaterThan(0.3);
+  // Undo puts both back in one step.
+  await page.keyboard.press("Meta+z");
+  a = (await objs(page)).find((o: any) => o.id === "a");
+  expect(a.pts[1]).toEqual({ x: 0, y: 1 });
+  await page.keyboard.down("Meta");
+  await page.mouse.move(...(await at(page, 0, 1)));
+  await page.mouse.down();
+  await page.mouse.move(...(await at(page, 0.5, 1.6)), { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.up("Meta");
+  a = (await objs(page)).find((o: any) => o.id === "a");
+  expect(a.pts[1]).toEqual({ x: 0, y: 1 });
+});

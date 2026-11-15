@@ -14,12 +14,13 @@ import {
 } from "../model/geometry";
 import { buildSnapIndex, snap, visibleGrid, type SnapIndex, type SnapResult } from "../model/snap";
 import { boxGuides, pointGuides, type GuideCtx } from "../model/guides";
+import { attachedIds, withAttached } from "../model/attach";
 import { DEFAULT_STYLE, newId, type CurveNode, type CurveObj, type EllipseObj, type Obj, type PathObj, type Scene, type Vec } from "../model/types";
 import { nodeHandles, sampleCurve } from "../model/curve";
 import { processStroke } from "../model/sketch";
 import { piecesToObj, trimAt, type Piece } from "../model/trim";
 import { regionAt } from "../model/region";
-import { closestOnSegment, distToSegment as distToSeg, pathSegments, rotationAbout } from "../model/geometry";
+import { closestOnSegment, distToSegment as distToSeg, pathSegments, ptToCm, rotationAbout } from "../model/geometry";
 import { labelBox } from "../labels/render";
 import { store, withGroups, type ToolName } from "../store";
 
@@ -287,6 +288,11 @@ function objectAt(p: Vec): Obj | null {
   const { scene, view } = store.get();
   // Generous: lines are thin, and you shouldn't have to aim.
   const tol = HIT_PX / view.zoom;
+  // A dot under the mouse wins over the lines that end at it (graph vertices).
+  for (let i = scene.objects.length - 1; i >= 0; i--) {
+    const o = scene.objects[i];
+    if (o.type === "point" && dist(o.p, p) <= ptToCm(o.size) + 4 / view.zoom) return o;
+  }
   let best: Obj | null = null;
   let bd = tol;
   // Topmost first; a closer hit wins only when clearly closer.
@@ -707,7 +713,8 @@ export function onPointerMove(e: PEvent) {
     case "move": {
       if (!drag.moved && dist(e.screen, drag.downScreen) < 3) return;
       drag.moved = true;
-      const exclude = drag.orig.map((o) => o.id);
+      // Lines that follow the dragged dots aren't snapped to.
+      const exclude = [...drag.orig.map((o) => o.id), ...(e.meta ? [] : attachedIds(drag.orig, drag.before.objects))];
       const target = add(drag.ref, sub(e.world, drag.ref));
       let sr = doSnap(target, e, { exclude, from: drag.ref, noGuides: true });
       let d = sub(sr.p, drag.ref);
@@ -730,7 +737,7 @@ export function onPointerMove(e: PEvent) {
       } else if (s.guides.length) store.set({ guides: [] });
       const m = { a: 1, b: 0, c: 0, d: 1, e: d.x, f: d.y };
       store.set({ snap: sr });
-      store.preview(store.withReplaced(drag.orig.map((o) => transformObj(o, m)), drag.before));
+      store.preview(store.withReplaced(e.meta ? drag.orig.map((o) => transformObj(o, m)) : withAttached(drag.orig, drag.orig.map((o) => transformObj(o, m)), drag.before.objects), drag.before));
       return;
     }
     case "marquee": {
@@ -750,7 +757,7 @@ export function onPointerMove(e: PEvent) {
       if (e.shift) deg = Math.round(deg / 15) * 15;
       const m = rotationAbout(drag.c, deg);
       store.set({ snap: null, message: `${Math.round((((deg % 360) + 540) % 360) - 180)}°` });
-      store.preview(store.withReplaced(drag.orig.map((o) => transformObj(o, m)), drag.before));
+      store.preview(store.withReplaced(withAttached(drag.orig, drag.orig.map((o) => transformObj(o, m)), drag.before.objects), drag.before));
       return;
     }
     case "scale": {
@@ -766,7 +773,7 @@ export function onPointerMove(e: PEvent) {
       }
       const m = scalingAbout(f, sx, sy);
       store.set({ snap: sr });
-      store.preview(store.withReplaced(drag.orig.map((o) => transformObj(o, m)), drag.before));
+      store.preview(store.withReplaced(withAttached(drag.orig, drag.orig.map((o) => transformObj(o, m)), drag.before.objects), drag.before));
       return;
     }
     case "curveNode": {
