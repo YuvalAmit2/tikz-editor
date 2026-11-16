@@ -649,9 +649,18 @@ function StatusBar() {
   const snap = useStore((s) => s.snap);
   const message = useStore((s) => s.message);
   const tool = useStore((s) => s.tool);
-  const editing = useStore((s) => !!s.pointEdit || (s.showControls && s.tool === "select" && s.scene.objects.some((o) => o.type === "curve" && s.selection.includes(o.id))));
+  // What is being edited: its points (a curve, a polygon) or its radii (an ellipse).
+  const editing = useStore((s) => {
+    const o = s.pointEdit ? s.scene.objects.find((x) => x.id === s.pointEdit) : undefined;
+    if (o) return o.type;
+    return s.showControls && s.tool === "select" && s.scene.objects.some((x) => x.type === "curve" && s.selection.includes(x.id)) ? "curve" : null;
+  });
   const hint =
-    editing
+    editing === "ellipse"
+      ? "Drag a dot to change that radius"
+      : editing === "path"
+        ? "↵ adds a point at the dot on the line · ⌫ deletes one"
+      : editing
       ? "↵ adds a point at the dot on the line · ⌫ deletes one · ⇧-drag mirrors"
       : tool === "polyline" || tool === "curve"
         ? "↵ to finish · click the first point to close"
@@ -667,7 +676,7 @@ function StatusBar() {
       <span className="zoom">{Math.round((zoom / (96 / 2.54)) * 100)}%</span>
       <span className="coords" data-testid="coords">{cursor ? `(${cursor.x.toFixed(2)}, ${cursor.y.toFixed(2)}) cm` : ""}</span>
       {snap && snap.kind !== "none" && <span className="muted">snap: {snap.kind}</span>}
-      <span className="muted grow">{hint}</span>
+      <span className="muted grow" data-testid="hint">{hint}</span>
       {message && <span className="message">{message}</span>}
     </div>
   );

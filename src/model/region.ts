@@ -2,9 +2,10 @@
 //
 // Every line, curve and ellipse is cut where it crosses the others; the
 // stretches between cuts are the edges of a planar graph whose vertices are
-// the cut points. From the point, a ray to the right finds the nearest edge;
-// walking along edges and always taking the sharpest turn that keeps the
-// region on the left goes once around the region's boundary.
+// the cut points. In each connected group of lines, a ray from the point
+// finds the nearest edge; walking along edges and always taking the sharpest
+// turn that keeps the region on the left goes once around the face the point
+// is in. The smallest such face is the region; groups inside it are holes.
 import { chunks, crossings, cutters, subChain, toChain, type Chain, type Piece } from "./trim";
 import { bezierPoint } from "./curve";
 import { lerp, segIntersect } from "./geometry";
@@ -153,14 +154,26 @@ export function regionAt(objects: Obj[], p: Vec): Region | null {
   const live = edges.filter((_, i) => alive[i]);
   if (!live.length) return null;
 
-  const outer = walk(live, p);
-  if (!outer || outer.area <= 1e-9) return null;
+  // The face around p in each connected group of lines (the nearest line to
+  // the right may be a shape p is outside of, e.g. a hole); the smallest wins.
+  const comp = components(live);
+  const groups = new Map<number, Edge[]>();
+  for (const e of live) {
+    const id = comp.get(e)!;
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id)!.push(e);
+  }
+  let outer: ReturnType<typeof walk> = null;
+  for (const es of groups.values()) {
+    const w = walk(es, p);
+    if (w && w.area > 1e-9 && (!outer || w.area < outer.area)) outer = w;
+  }
+  if (!outer) return null;
   const { pieces: result, used } = outer;
 
   // Holes: lines that don't touch the boundary, inside it (a ring between
   // two circles, a disc with punctures). Each is cut out along its outside.
   const usedEdges = new Set(used.map((h) => h.e));
-  const comp = components(live);
   const touched = new Set(live.filter((e) => usedEdges.has(e)).map((e) => comp.get(e)));
   const outline = sample(result);
   const holes: Piece[][] = [];

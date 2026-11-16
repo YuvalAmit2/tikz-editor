@@ -3,6 +3,8 @@ import {
   add,
   dist,
   hitDistance,
+  insideFill,
+  insideOutline,
   insideBox,
   scalingAbout,
   sub,
@@ -299,10 +301,36 @@ function objectAt(p: Vec): Obj | null {
   for (let i = scene.objects.length - 1; i >= 0; i--) {
     const o = scene.objects[i];
     const d = hitDistance(o, p, lbox);
+    if (d === 0 && insideFill(o, p)) {
+      // Inside a fill: a line above it, near the mouse, still wins.
+      if (best) break;
+      return shapeOnFill(o, i, p);
+    }
     if (d < bd - 1e-9 || (d === 0 && bd > 0)) {
       bd = d;
       best = o;
       if (d === 0) break;
+    }
+  }
+  return best;
+}
+
+/** Clicking inside a fill, but also inside an unfilled outline drawn on top
+ *  of it (a circle on a filled blob): the outline, the smallest such one. */
+function shapeOnFill(fill: Obj, index: number, p: Vec): Obj {
+  const objs = store.get().scene.objects;
+  const fb = geomBox(fill);
+  let best = fill;
+  let area = Infinity;
+  for (let i = index + 1; i < objs.length; i++) {
+    const o = objs[i];
+    if (o.hidden || o.style.stroke === null || !insideOutline(o, p)) continue;
+    const b = geomBox(o);
+    if (!b || !fb || b.minX < fb.minX - 1e-6 || b.maxX > fb.maxX + 1e-6 || b.minY < fb.minY - 1e-6 || b.maxY > fb.maxY + 1e-6) continue;
+    const a = (b.maxX - b.minX) * (b.maxY - b.minY);
+    if (a < area) {
+      area = a;
+      best = o;
     }
   }
   return best;

@@ -279,6 +279,20 @@ export function closestOnEllipse(o: EllipseObj, p: Vec): Vec {
   return ellipsePoint(o, bestT);
 }
 
+/** Is p inside the object's closed outline (and not in one of its holes)? */
+export function insideOutline(o: Obj, p: Vec): boolean {
+  if (o.type === "ellipse") {
+    const q = ellipseLocal(o, p);
+    return q.x * q.x + q.y * q.y <= 1;
+  }
+  if ((o.type !== "path" && o.type !== "curve") || !o.closed) return false;
+  const ring = (x: Obj) => (x.type === "path" ? x.pts : x.type === "curve" ? sampleCurve(x) : []);
+  return pointInPolygon(p, ring(o)) && !(o.holes ?? []).some((h) => pointInPolygon(p, ring(h)));
+}
+
+/** Is p inside the filled part of a shape? */
+export const insideFill = (o: Obj, p: Vec) => !!o.style.fill && insideOutline(o, p);
+
 /** Distance (cm) from p to the object, 0 if inside a filled shape.
  *  Labels need their rendered size, given by labelBox. */
 export function hitDistance(o: Obj, p: Vec, labelBox?: (o: Obj) => Box | null): number {
@@ -287,12 +301,11 @@ export function hitDistance(o: Obj, p: Vec, labelBox?: (o: Obj) => Box | null): 
       let d = Infinity;
       for (const [a, b] of pathSegments(o)) d = Math.min(d, distToSegment(p, a, b));
       if (o.pts.length === 1) d = dist(p, o.pts[0]);
-      if (o.closed && o.style.fill && pointInPolygon(p, o.pts)) d = 0;
+      if (insideFill(o, p)) d = 0;
       return d;
     }
     case "ellipse": {
-      const q = ellipseLocal(o, p);
-      if (o.style.fill && q.x * q.x + q.y * q.y <= 1) return 0;
+      if (insideFill(o, p)) return 0;
       return dist(p, closestOnEllipse(o, p));
     }
     case "point":
@@ -302,7 +315,7 @@ export function hitDistance(o: Obj, p: Vec, labelBox?: (o: Obj) => Box | null): 
       let d = Infinity;
       for (let i = 0; i + 1 < pts.length; i++) d = Math.min(d, distToSegment(p, pts[i], pts[i + 1]));
       if (pts.length === 1) d = dist(p, pts[0]);
-      if (o.closed && o.style.fill && pointInPolygon(p, pts)) d = 0;
+      if (insideFill(o, p)) d = 0;
       return d;
     }
     case "label": {

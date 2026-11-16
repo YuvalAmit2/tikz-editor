@@ -78,6 +78,39 @@ function boxAt(p: Vec, anchor: Anchor, size: { w: number; h: number }): Box {
 
 const overlap = (a: Box, b: Box) => Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX)) * Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY));
 
+/** Middle of a closed outline (its area centroid). */
+function centroid(ring: Vec[]): Vec {
+  let a = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const p = ring[i];
+    const q = ring[(i + 1) % ring.length];
+    const c = p.x * q.y - q.x * p.y;
+    a += c;
+    cx += (p.x + q.x) * c;
+    cy += (p.y + q.y) * c;
+  }
+  if (Math.abs(a) < 1e-12) return ring.reduce((s, p) => ({ x: s.x + p.x / ring.length, y: s.y + p.y / ring.length }), { x: 0, y: 0 });
+  return { x: cx / (3 * a), y: cy / (3 * a) };
+}
+
+/** The outermost point where the ray from c in direction d leaves the outline. */
+function farthestOnRay(ring: Vec[], c: Vec, d: Vec): Vec | null {
+  let best = -1;
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % ring.length];
+    const e = { x: b.x - a.x, y: b.y - a.y };
+    const den = d.x * e.y - d.y * e.x;
+    if (Math.abs(den) < 1e-12) continue;
+    const t = ((a.x - c.x) * e.y - (a.y - c.y) * e.x) / den;
+    const u = ((a.x - c.x) * d.y - (a.y - c.y) * d.x) / den;
+    if (t > 0 && u >= 0 && u <= 1) best = Math.max(best, t);
+  }
+  return best > 0 ? { x: c.x + d.x * best, y: c.y + d.y * best } : null;
+}
+
 function candidates(targets: Obj[], gap: number, near?: Vec): Candidate[] {
   const out: Candidate[] = [];
   let rank = 0;
@@ -100,6 +133,20 @@ function candidates(targets: Obj[], gap: number, near?: Vec): Candidate[] {
         const d = { x: q.x - o.c.x, y: q.y - o.c.y };
         const l = Math.hypot(d.x, d.y) || 1;
         out.push({ p: { x: q.x + (d.x / l) * gap, y: q.y + (d.y / l) * gap }, anchor: anchorFor(d.x, d.y), rank: rank++ });
+      }
+    }
+    if (o.type === "curve" && o.closed) {
+      // Just outside the outline, in each direction from its middle (a blob's
+      // bounding box can be far from it), a little farther too for a sloping side.
+      const ring = sampleCurve(o, 16);
+      const cen = centroid(ring);
+      for (const deg of [45, 0, 90, 135, 315, 180, 270, 225]) {
+        const t = (deg * Math.PI) / 180;
+        const d = { x: Math.cos(t), y: Math.sin(t) };
+        const hit = farthestOnRay(ring, cen, d);
+        if (!hit) continue;
+        const r0 = rank++;
+        for (const [k, r] of [gap, gap + 0.08, gap + 0.2].entries()) out.push({ p: { x: hit.x + d.x * r, y: hit.y + d.y * r }, anchor: anchorFor(d.x, d.y), rank: r0 + k * 3 });
       }
     }
     if ((o.type === "path" || o.type === "curve") && !o.closed) {
