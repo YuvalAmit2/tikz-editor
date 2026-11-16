@@ -8,3 +8,6 @@ tests/e2e/__screens__/
 *.log
 .DS_Store
 tests/scratch/
+
+# Prompts for Claude (local only)
+feedback/

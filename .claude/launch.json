@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "tikz-dev", "runtimeExecutable": "npx", "runtimeArgs": ["vite", "--host", "127.0.0.1", "--port", "5175", "--strictPort"], "port": 5175, "env": { "TIKZ_EDITOR_HOME": "/private/tmp/claude-501/-Users-yuvalamit-latex-tikz-editor/20ec7405-3e5c-4e21-bb6c-891d47b3ba94/scratchpad/home" } }
+  ]
+}
