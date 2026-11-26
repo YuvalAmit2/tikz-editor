@@ -62,6 +62,7 @@ export function regionAt(objects: Obj[], p: Vec): Region | null {
     if (c && o.style.stroke !== null) chains.push({ o, c });
   }
   if (!chains.length) return null;
+  dropCovered(chains);
 
   // Vertices: cut points, merged when close.
   const verts: Vec[] = [];
@@ -211,6 +212,39 @@ export function regionAt(objects: Obj[], p: Vec): Region | null {
     if (all) return whole(id);
   }
   return keep.length ? { pieces: result, holes: keep } : { pieces: result };
+}
+
+/** A line lying entirely on another (a triangle's side drawn again for its
+ *  arrow) adds nothing but trouble (it touches the other everywhere): drop it. */
+function dropCovered(chains: { o: Obj; c: Chain }[]) {
+  const polys = chains.map(({ c }) => sample(c.pieces).concat(c.closed ? [c.pieces[0].a] : [c.pieces[c.pieces.length - 1].b]));
+  const boxes = polys.map((ps) => ({ minX: Math.min(...ps.map((q) => q.x)), maxX: Math.max(...ps.map((q) => q.x)), minY: Math.min(...ps.map((q) => q.y)), maxY: Math.max(...ps.map((q) => q.y)) }));
+  const ON = 0.01;
+  const onPoly = (q: Vec, ps: Vec[]) => {
+    for (let k = 0; k + 1 < ps.length; k++) if (distToSegment(q, ps[k], ps[k + 1]) < ON) return true;
+    return false;
+  };
+  const covered = (i: number, j: number) => {
+    const a = boxes[i];
+    const b = boxes[j];
+    if (a.minX < b.minX - ON || a.maxX > b.maxX + ON || a.minY < b.minY - ON || a.maxY > b.maxY + ON) return false;
+    // Densely along it (a short polygon side has only its ends sampled).
+    const ps = polys[i];
+    for (let k = 0; k + 1 < ps.length; k++)
+      for (let t = 0; t <= 8; t++) if (!onPoly(lerp(ps[k], ps[k + 1], t / 8), polys[j])) return false;
+    return true;
+  };
+  const gone = new Set<number>();
+  for (let i = 0; i < chains.length; i++)
+    for (let j = 0; j < chains.length; j++) {
+      if (i === j || gone.has(j)) continue;
+      // Two identical lines: the later one goes.
+      if (covered(i, j) && !(covered(j, i) && j > i)) {
+        gone.add(i);
+        break;
+      }
+    }
+  for (const i of [...gone].sort((a, b) => b - a)) chains.splice(i, 1);
 }
 
 type H = { e: Edge; fwd: boolean };

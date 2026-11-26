@@ -104,7 +104,7 @@ function onKeyDown(e: KeyboardEvent) {
   }
   if (e.key === "Escape") {
     if (hasDraft()) return cancelDraft();
-    if (s.pointEdit) return store.set({ pointEdit: null, activeNode: null });
+    if (s.pointEdit) return store.set({ pointEdit: null, activeNode: null, pieceSel: null });
     if (s.tool !== "select") return setTool("select");
     return store.set({ selection: [], editingLabel: null });
   }

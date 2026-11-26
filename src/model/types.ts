@@ -110,7 +110,7 @@ interface Base {
 
 export interface PartStyle {
   at: number;
-  style: Partial<Pick<Style, "stroke" | "width" | "dash">>;
+  style: Partial<Pick<Style, "stroke" | "width" | "dash" | "mid">>;
 }
 
 /** Polyline or polygon (closed). Lines and rectangles are paths too. */
@@ -120,6 +120,8 @@ export interface PathObj extends Base {
   closed: boolean;
   /** Holes in the fill (a filled ring, a disc with punctures). */
   holes?: (PathObj | CurveObj)[];
+  /** Made as a regular polygon: its number of sides can be changed. */
+  regular?: boolean;
 }
 
 /** Ellipse (circle when rx = ry), rotated by `rot` degrees about its centre. */
@@ -137,6 +139,10 @@ export interface PointObj extends Base {
   p: Vec;
   /** Radius in pt. */
   size: number;
+  /** Drawn as a short dash instead of a dot (a tick on a number line), at
+   *  `angle` degrees (90: upright), half as long as 2 × size. */
+  look?: "tick";
+  angle?: number;
 }
 
 /** A text/math label: a TikZ node. */
@@ -156,7 +162,20 @@ export interface LabelObj extends Base {
   /** Labels made with the Label button stay with what they label: when it
    *  moves, the label moves too (ref: where it was), or with `avoid`, it's
    *  placed again so it stays clear of lines. */
-  follow?: { ids: string[]; ref: Vec; avoid: boolean; off?: boolean };
+  follow?: {
+    ids: string[];
+    ref: Vec;
+    avoid: boolean;
+    off?: boolean;
+    /** Where it would like to be (from ref): placed again after every change,
+     *  as near there as it can be clear of lines. */
+    home?: Vec;
+    /** Put somewhere by hand: it only moves with its objects. */
+    custom?: boolean;
+    /** Chosen from the 3×3 grid: that side or corner of its objects' box
+     *  ("center" on top of them). */
+    at?: Anchor;
+  };
   /** A white box behind the text (so it can sit on a line). */
   bg?: boolean;
   /** Made by clicking with the Text tool: the text itself (not TikZ's box

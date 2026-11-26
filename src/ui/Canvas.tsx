@@ -2,9 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { zoomAt, zoomToFit } from "../actions";
 import { getLabel, labelBox, labelImage, labelNodeBox, labelStore } from "../labels/render";
 import { geomBox, ptToCm, sub, len, unionBox, type Box } from "../model/geometry";
-import type { Obj, Style, Vec } from "../model/types";
+import type { CurveObj, Obj, Style, Vec } from "../model/types";
+import { tickEnds } from "../model/ticks";
 import { patternLook, xcolorCss } from "../model/xcolor";
-import { marksOf } from "../model/marks";
+import { styledMarks } from "../model/marks";
 import { strokeRuns } from "../model/height";
 import { waved } from "../model/wave";
 import { curvePathD, curveSegments } from "../model/curve";
@@ -241,19 +242,19 @@ function ArrowTip({ tip, from, st, z }: { tip: Vec; from: Vec; st: Style; z: num
 /** Arrowheads in the middle of the line (style.mid), as TikZ draws them:
  *  the tip at the mark, a second one just behind it for "two". */
 function MidMarks({ o, st, z }: { o: Obj; st: Style; z: number }) {
-  const marks = marksOf(o);
-  if (!marks.length || !st.stroke) return null;
-  const n = Math.min(2, Math.abs(st.mid ?? 0));
-  const lw = ptToCm(st.width);
-  const step = ptToCm(2.2) + 3.5 * lw;
+  const marks = styledMarks(o);
+  if (!marks.length) return null;
   return (
     <>
-      {marks.flatMap((m, i) =>
-        Array.from({ length: n }, (_, k) => {
+      {marks.flatMap((m, i) => {
+        // Each mark in its own side's colour and thickness.
+        const ms = { ...st, stroke: m.stroke, width: m.width };
+        const step = ptToCm(2.2) + 3.5 * ptToCm(m.width);
+        return Array.from({ length: m.heads }, (_, k) => {
           const tip = { x: m.p.x - m.dir.x * step * 0.8 * k, y: m.p.y - m.dir.y * step * 0.8 * k };
-          return <ArrowTip key={i + "-" + k} tip={tip} from={{ x: tip.x - m.dir.x, y: tip.y - m.dir.y }} st={st} z={z} />;
-        }),
-      )}
+          return <ArrowTip key={i + "-" + k} tip={tip} from={{ x: tip.x - m.dir.x, y: tip.y - m.dir.y }} st={ms} z={z} />;
+        });
+      })}
     </>
   );
 }
@@ -282,13 +283,7 @@ function CurveTextView({ o }: { o: Extract<Obj, { type: "curve" }> }) {
 }
 
 function ObjView({ o, z }: { o: Obj; z: number }) {
-  if (o.type === "curve" && o.text)
-    return (
-      <g data-id={o.id}>
-        <ObjView o={{ ...o, text: undefined }} z={z} />
-        <CurveTextView o={o} />
-      </g>
-    );
+  if (o.type === "curve" && o.text) return <TextCurveView o={o} z={z} />;
   // Hidden: faint, so it can still be found and selected.
   if (o.hidden)
     return (
@@ -297,6 +292,18 @@ function ObjView({ o, z }: { o: Obj; z: number }) {
       </g>
     );
   return <VisibleObjView o={o} z={z} />;
+}
+
+/** Text along a curve. With its line hidden, the line isn't drawn at all
+ *  (just faintly while selected, to edit it). */
+function TextCurveView({ o, z }: { o: CurveObj; z: number }) {
+  const selected = useStore((s) => s.selection.includes(o.id));
+  return (
+    <g data-id={o.id}>
+      {(!o.hidden || selected) && <ObjView o={{ ...o, text: undefined }} z={z} />}
+      <CurveTextView o={o} />
+    </g>
+  );
 }
 
 function VisibleObjView({ o, z }: { o: Obj; z: number }) {
@@ -395,8 +402,13 @@ function PlainObjView({ o, z }: { o: Obj; z: number }) {
         </g>
       );
     }
-    case "point":
+    case "point": {
+      if (o.look === "tick") {
+        const [a, b] = tickEnds(o);
+        return <line data-id={o.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={xcolorCss(o.style.stroke ?? "black")} strokeWidth={ptToCm(o.style.width)} />;
+      }
       return <circle data-id={o.id} cx={o.p.x} cy={o.p.y} r={ptToCm(o.size)} fill={xcolorCss(o.style.stroke ?? "black")} />;
+    }
     case "label":
       return <LabelView o={o} z={z} />;
   }
@@ -457,7 +469,7 @@ function Highlight({ o, z }: { o: Obj; z: number }) {
         />
       );
     case "point":
-      return <circle cx={o.p.x} cy={o.p.y} r={ptToCm(o.size) + 3 / z} fill="none" stroke={SEL} strokeWidth={w} />;
+      return <circle cx={o.p.x} cy={o.p.y} r={(o.look === "tick" ? ptToCm(o.size * 2) : ptToCm(o.size)) + 3 / z} fill="none" stroke={SEL} strokeWidth={w} />;
     case "label": {
       const b = labelBox(o);
       if (!b) return null;

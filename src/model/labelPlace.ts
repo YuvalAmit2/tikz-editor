@@ -246,6 +246,21 @@ function candidates(targets: Obj[], gap: number, near?: Vec): Candidate[] {
   return out;
 }
 
+/** A side or corner of the objects' box (from the 3×3 grid), just outside
+ *  it; "center" is right on top of them. */
+export function spotAt(targets: Obj[], at: Anchor): { p: Vec; anchor: Anchor } {
+  let b: Box | null = null;
+  for (const t of targets) b = unionBox(b, geomBox(t));
+  if (!b) return { p: { x: 0, y: 0 }, anchor: "center" };
+  const fx = at.includes("east") ? 1 : at.includes("west") ? -1 : 0;
+  const fy = at.includes("north") ? 1 : at.includes("south") ? -1 : 0;
+  const gap = 0.07;
+  const cx = (b.minX + b.maxX) / 2;
+  const cy = (b.minY + b.maxY) / 2;
+  const p = { x: cx + fx * ((b.maxX - b.minX) / 2 + gap), y: cy + fy * ((b.maxY - b.minY) / 2 + gap) };
+  return { p, anchor: fx === 0 && fy === 0 ? "center" : anchorFor(fx, fy) };
+}
+
 /** Does a label's (ink) box cross any line of the scene? */
 export function labelCrossesLines(b: Box, scene: Obj[], ignore: string[] = []): boolean {
   const ign = new Set(ignore);

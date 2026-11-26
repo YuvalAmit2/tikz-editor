@@ -1,6 +1,7 @@
 // Geometry helpers: vectors, affine maps, bounding boxes, hit testing.
 import type { CurveObj, EllipseObj, Obj, Vec } from "./types";
 import { nodeHandles, sampleCurve } from "./curve";
+import { tickEnds } from "./ticks";
 
 export const PT_PER_CM = 72.27 / 2.54; // TeX points
 export const ptToCm = (pt: number) => pt / PT_PER_CM;
@@ -88,7 +89,31 @@ export function transformEllipse(o: EllipseObj, m: Affine): EllipseObj {
     [m.b * M[0][0] + m.d * M[1][0], m.b * M[0][1] + m.d * M[1][1]],
   ];
   const { s1, s2, angle } = svd2(N);
-  return { ...o, c: applyAffine(m, o.c), rx: s1, ry: s2, rot: normDeg(angle) };
+  // The same ellipse has several descriptions (axes swapped, turned half
+  // round); take the one whose starting point (angle 0, where its arrows
+  // are measured from) is where the transform takes the old one. A circle's
+  // own angle is otherwise arbitrary, and its arrows wouldn't turn with it.
+  const ax = (Math.atan2(N[1][0], N[0][0]) * 180) / Math.PI;
+  const diff = (a: number) => Math.abs(((((a - ax) % 360) + 540) % 360) - 180);
+  const options: [number, number, number][] =
+    Math.abs(s1 - s2) <= 1e-9 * Math.max(s1, 1)
+      ? [[s1, s2, ax]]
+      : [
+          [s1, s2, angle],
+          [s1, s2, angle + 180],
+          [s2, s1, angle + 90],
+          [s2, s1, angle - 90],
+        ];
+  const [rx, ry, rot] = options.reduce((a, b) => (diff(b[2]) < diff(a[2]) - 1e-9 ? b : a));
+  return { ...o, c: applyAffine(m, o.c), rx, ry, rot: Math.abs(rot % 360) < 1e-9 ? 0 : ((rot % 360) + 360) % 360 };
+}
+
+/** A label's follow data under a transform (its home turns with it). */
+function followThrough<F extends { ref: Vec; home?: Vec }>(f: F, m: Affine): F {
+  const ref = applyAffine(m, f.ref);
+  if (!f.home) return { ...f, ref };
+  const h = applyAffine(m, { x: f.ref.x + f.home.x, y: f.ref.y + f.home.y });
+  return { ...f, ref, home: { x: h.x - ref.x, y: h.y - ref.y } };
 }
 
 /** Singular values of a 2x2 matrix and the angle (deg) of its first left singular vector. */
@@ -132,10 +157,15 @@ function transformOne(o: Obj, m: Affine): Obj {
       return { ...o, pts: o.pts.map((p) => applyAffine(m, p)) };
     case "ellipse":
       return transformEllipse(o, m);
-    case "point":
-      return { ...o, p: applyAffine(m, o.p) };
+    case "point": {
+      if (o.look !== "tick") return { ...o, p: applyAffine(m, o.p) };
+      // A dash turns (and mirrors) with the rest.
+      const t = ((o.angle ?? 90) * Math.PI) / 180;
+      const d = { x: m.a * Math.cos(t) + m.c * Math.sin(t), y: m.b * Math.cos(t) + m.d * Math.sin(t) };
+      return { ...o, p: applyAffine(m, o.p), angle: (Math.atan2(d.y, d.x) * 180) / Math.PI };
+    }
     case "label":
-      return { ...o, p: applyAffine(m, o.p), ...(o.follow ? { follow: { ...o.follow, ref: applyAffine(m, o.follow.ref) } } : {}), ...(o.inkAt ? { inkAt: applyAffine(m, o.inkAt) } : {}) };
+      return { ...o, p: applyAffine(m, o.p), ...(o.follow ? { follow: followThrough(o.follow, m) } : {}), ...(o.inkAt ? { inkAt: applyAffine(m, o.inkAt) } : {}) };
     case "curve":
       return transformCurve(o, m);
   }
@@ -308,8 +338,13 @@ export function hitDistance(o: Obj, p: Vec, labelBox?: (o: Obj) => Box | null): 
       if (insideFill(o, p)) return 0;
       return dist(p, closestOnEllipse(o, p));
     }
-    case "point":
+    case "point": {
+      if (o.look === "tick") {
+        const [a, b] = tickEnds(o);
+        return distToSegment(p, a, b);
+      }
       return Math.max(0, dist(p, o.p) - ptToCm(o.size));
+    }
     case "curve": {
       const pts = sampleCurve(o);
       let d = Infinity;

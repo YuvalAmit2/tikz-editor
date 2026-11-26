@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { copyTikz, flipH, flipV, newFigure, open, rotate90, save, setSnapKind, setTool } from "../actions";
-import { store, useStore, type ToolName } from "../store";
+import { store, useStore, type PointLook, type ToolName } from "../store";
 
 /** An icon: every line is 1.25 wide. */
 const I = ({ children }: { children: React.ReactNode; crisp?: boolean }) => (
@@ -16,6 +16,7 @@ export const TOOLS: { tool: ToolName; key: string; label: string; icon: React.Re
   { tool: "curve", key: "B", label: "Curve through points", icon: <I><path d="M3 15C5 4 9 4 10 10s5 6 7-5" /><circle cx="3" cy="15" r="1.2" fill="currentColor" /><circle cx="10" cy="10" r="1.2" fill="currentColor" /><circle cx="17" cy="5" r="1.2" fill="currentColor" /></I> },
   { tool: "sketch", key: "S", label: "Sketch (smooths your stroke)", icon: <I><path d="M13.2 2.8l3 3-8.4 8.4-3.6.6.6-3.6z" /><path d="M11.3 4.7l3 3" /><path d="M4.5 17.6c1.6-1.3 3 1.3 4.6 0s3-1.3 4.6 0" /></I> },
   { tool: "rect", key: "R", label: "Rectangle", icon: <I><rect x="3.5" y="5" width="13" height="10" /></I> },
+  { tool: "ngon", key: "N", label: "Regular polygon (drag from the middle to a corner; ⇧ sits it on a side; sides in the style panel)", icon: <I><path d="M10 3l6.1 3.5v7L10 17l-6.1-3.5v-7z" /></I> },
   { tool: "ellipse", key: "E", label: "Ellipse (⇧ for a circle)", icon: <I><ellipse cx="10" cy="10" rx="7.5" ry="4.5" /></I> },
   { tool: "point", key: "D", label: "Point (dot)", icon: <I><circle cx="10" cy="10" r="2.5" fill="currentColor" /></I> },
   { tool: "text", key: "T", label: "Text / math label", icon: <I><path d="M5 5h10M10 5v11" /></I> },
@@ -51,6 +52,8 @@ export function Toolbar() {
           {(i === 1 || t.tool === "rect" || t.tool === "text") && <span className="mini-sep" />}
           {t.tool === "line" ? (
             <LineSlot active={tool === "line"} k={toolKey(t)} />
+          ) : t.tool === "point" ? (
+            <PointSlot active={tool === "point"} k={toolKey(t)} />
           ) : (
             <Btn k={t.tool === "select" ? "␣" : toolKey(t)} active={tool === t.tool} title={`${t.label} (${t.tool === "select" ? "Space or " : ""}${toolKey(t)})`} testid={`tool-${t.tool}`} onClick={() => setTool(t.tool)}>
               {t.icon}
@@ -164,6 +167,48 @@ function LineSlot({ active, k }: { active: boolean; k: string }) {
               }}>
               <span className="kind-row">{x.icon}{x.label}</span>
               {x.kind === kind && <span className="pkey">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
+const POINT_LOOKS: { look: PointLook; label: string; icon: React.ReactNode }[] = [
+  { look: "dot", label: "Dot", icon: <I><circle cx="10" cy="10" r="2.5" fill="currentColor" /></I> },
+  { look: "vtick", label: "Upright dash (a tick)", icon: <I><path d="M3 12h14" opacity="0.4" /><path d="M10 7v6" strokeWidth="1.6" /></I> },
+  { look: "htick", label: "Flat dash", icon: <I><path d="M10 4v12" opacity="0.4" /><path d="M7 10h6" strokeWidth="1.6" /></I> },
+  { look: "normal", label: "Dash across the line it's on", icon: <I><path d="M3 15C7 13 12 9 17 4" opacity="0.4" /><path d="M8 8.5l3.4 4" strokeWidth="1.6" /></I> },
+];
+
+/** The Point tool, with a menu of looks. */
+function PointSlot({ active, k }: { active: boolean; k: string }) {
+  const look = useStore((s) => s.pointLook);
+  const open = useStore((s) => s.pointMenu);
+  const root = useRef<HTMLSpanElement>(null);
+  useCloseOutside(open, root, () => store.set({ pointMenu: false }));
+  const cur = POINT_LOOKS.find((x) => x.look === look)!;
+  return (
+    <span className="snap-slot line-slot" ref={root} onContextMenu={(e) => {
+        e.preventDefault();
+        store.set({ pointMenu: !open });
+      }}>
+      <Btn k={k} active={active} title={`${cur.label} (${k}); the arrow beside it picks a dot or a dash`} testid="tool-point" onClick={() => setTool("point")}>
+        {cur.icon}
+      </Btn>
+      <button className="tool-caret" title="Dot or dash" data-testid="point-looks" onClick={() => store.set({ pointMenu: !open })}>
+        <svg width="7" height="5" viewBox="0 0 7 5"><path d="M.5 1l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.1" /></svg>
+      </button>
+      {open && (
+        <div className="context-menu snap-menu" data-testid="point-look-menu">
+          {POINT_LOOKS.map((x) => (
+            <button key={x.look} className={x.look === look ? "checked" : ""} data-testid={"point-look-" + x.look} onClick={() => {
+                store.set({ pointLook: x.look, pointMenu: false });
+                setTool("point");
+              }}>
+              <span className="kind-row">{x.icon}{x.label}</span>
+              {x.look === look && <span className="pkey">✓</span>}
             </button>
           ))}
         </div>

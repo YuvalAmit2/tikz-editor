@@ -22,6 +22,8 @@ import { nodeHandles, sampleCurve } from "../model/curve";
 import { processStroke } from "../model/sketch";
 import { piecesToObj, trimAt, type Piece } from "../model/trim";
 import { regionAt } from "../model/region";
+import { components } from "../model/parts";
+import { ngonPts, normalAngle } from "../model/ticks";
 import { closestOnSegment, distToSegment as distToSeg, pathSegments, ptToCm, rotationAbout } from "../model/geometry";
 import { labelBox } from "../labels/render";
 import { store, withGroups, type ToolName } from "../store";
@@ -377,6 +379,15 @@ function buildShape(tool: ToolName, a: Vec, b: Vec, shift: boolean): Obj | null 
         pts: [a, { x: a.x + w, y: a.y }, { x: a.x + w, y: a.y + h }, { x: a.x, y: a.y + h }],
       };
     }
+    case "ngon": {
+      // From the middle out to a corner; ⇧ sits it on a flat side.
+      const n = store.get().ngonSides;
+      const r = dist(a, b);
+      if (r < 1e-9) return null;
+      let t = Math.atan2(b.y - a.y, b.x - a.x);
+      if (shift) t = -Math.PI / 2 - Math.PI / n;
+      return { id, type: "path", style, closed: true, regular: true, pts: ngonPts(a, r, t, n) };
+    }
     case "circle":
       return { id, type: "ellipse", style, c: a, rx: dist(a, b), ry: dist(a, b), rot: 0 };
     case "ellipse": {
@@ -615,7 +626,10 @@ export function onPointerDown(e: PEvent) {
       return;
     }
     case "point": {
-      finishCreate({ id: newId(), type: "point", style: { ...s.style }, p: sp, size: 1.5 });
+      // A dot, or a dash: upright, flat, or across the line(s) it's on.
+      const look = s.pointLook;
+      const angle = look === "vtick" ? 90 : look === "htick" ? 0 : look === "normal" ? (normalAngle(sp, s.scene.objects, Math.max(0.03, 4 / s.view.zoom)) ?? 90) : undefined;
+      finishCreate({ id: newId(), type: "point", style: { ...s.style }, p: sp, size: 1.5, ...(look === "dot" ? {} : { look: "tick" as const, angle }) });
       return;
     }
     case "text": {
@@ -686,6 +700,8 @@ function selectDown(e: PEvent) {
     if (b && e.world.x >= b.minX - pad && e.world.x <= b.maxX + pad && e.world.y >= b.minY - pad && e.world.y <= b.maxY + pad) hit = store.objById(s.selection[0]) ?? null;
   }
   if (s.pointEdit && (!hit || hit.id !== s.pointEdit)) store.set({ pointEdit: null, activeNode: null });
+  // A side picked out of something else: the whole object again.
+  if (s.pieceSel && (!hit || hit.id !== s.pieceSel.id)) store.set({ pieceSel: null });
   if (!hit) {
     drag = { kind: "marquee", start: e.world, add: e.shift, base: e.shift ? s.selection : [] };
     store.set({ selection: drag.base, editingLabel: null });
@@ -1071,7 +1087,24 @@ export function onDoubleClick(e: PEvent) {
   const hit = objectAt(e.world);
   if (!hit) return;
   if (hit.type === "label") store.set({ selection: [hit.id], editingLabel: hit.id });
-  else if (hit.type === "path" || hit.type === "ellipse" || hit.type === "curve") store.set({ selection: [hit.id], pointEdit: hit.id, activeNode: null });
+  else if (hit.type === "path") {
+    // Its points to edit, and the side clicked picked out: the style panel
+    // then changes just that side (colour, dashes, arrows), which still
+    // moves with the rest.
+    let at = 0;
+    let bd = Infinity;
+    pathSegments(hit).forEach(([a, b], i) => {
+      const q = closestOnSegment(e.world, a, b);
+      const d = dist(q, e.world);
+      const l = dist(a, b);
+      if (d < bd) {
+        bd = d;
+        at = i + (l > 0 ? Math.min(0.999, Math.max(0.001, dist(a, q) / l)) : 0.5);
+      }
+    });
+    const { comps } = components(hit, store.get().scene.objects);
+    store.set({ selection: [hit.id], pointEdit: hit.id, activeNode: null, pieceSel: comps.length >= 2 ? { id: hit.id, ats: [at] } : null });
+  } else if (hit.type === "ellipse" || hit.type === "curve") store.set({ selection: [hit.id], pointEdit: hit.id, activeNode: null });
 }
 
 // ---------------------------------------------------------------- point editing

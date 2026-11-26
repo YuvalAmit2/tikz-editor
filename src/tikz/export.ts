@@ -13,6 +13,7 @@ import type { Obj, Pattern, Scene, Style } from "../model/types";
 import { patternLook } from "../model/xcolor";
 import { marksTikz } from "../model/marks";
 import { waved } from "../model/wave";
+import { tickEnds } from "../model/ticks";
 
 export const SCENE_MARKER = "%tikz-editor-scene ";
 
@@ -161,6 +162,10 @@ function plainToTikz(o: Obj): string | null {
     }
     case "point": {
       const color = o.style.stroke ?? o.style.fill ?? "black";
+      if (o.look === "tick") {
+        const [a, b] = tickEnds(o);
+        return `\\draw[${[color, ...(Math.abs(o.style.width - 0.4) > 1e-9 ? [`line width=${fmt(o.style.width)}pt`] : [])].join(",")}] ${coord(a)} -- ${coord(b)};`;
+      }
       return `\\fill[${color}] ${coord(o.p)} circle [radius=${fmt(o.size)}pt];`;
     }
     case "label": {

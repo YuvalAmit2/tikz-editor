@@ -26,7 +26,9 @@ export function components(o: Obj, others: Obj[]): { chain: Chain | null; comps:
   if (chain) {
     const n = chain.pieces.length;
     const eps = 1e-4;
-    let xs = [...crossings(chain, cutters(others.filter((x) => x.id !== o.id))), ...(o.cuts ?? [])].sort((a, b) => a - b);
+    // A line's or polygon's corners split it too: each side is a piece.
+    const corners = o.type === "path" ? Array.from({ length: chain.closed ? n : n - 1 }, (_, i) => (chain.closed ? i : i + 1)) : [];
+    let xs = [...crossings(chain, cutters(others.filter((x) => x.id !== o.id))), ...(o.cuts ?? []), ...corners].sort((a, b) => a - b);
     // Crossings very close together are one (a curve touching another one,
     // like a sphere's equator touching its outline, crosses the outline's
     // polyline twice right next to each other): use their middle.
@@ -169,11 +171,13 @@ export function withPartStyle(o: Obj, others: Obj[], ats: number[], patch: Parti
   if (!chain) return { parts: o.parts, cuts: o.cuts };
   const n = chain.pieces.length;
   const keep = (o.parts ?? []).map((p) => ({ ...p, style: { ...p.style } }));
-  const pick = (({ stroke, width, dash }) => {
+  const pick = ((p: Partial<Style>) => {
     const r: PartStyle["style"] = {};
-    if (stroke !== undefined) r.stroke = stroke;
-    if (width !== undefined) r.width = width;
-    if (dash !== undefined) r.dash = dash;
+    if (p.stroke !== undefined) r.stroke = p.stroke;
+    if (p.width !== undefined) r.width = p.width;
+    if (p.dash !== undefined) r.dash = p.dash;
+    // Arrows in the middle of a side (0: none, though the whole has some).
+    if ("mid" in p) r.mid = p.mid ?? 0;
     return r;
   })(patch);
   for (const at of ats) {
@@ -186,7 +190,7 @@ export function withPartStyle(o: Obj, others: Obj[], ats: number[], patch: Parti
   const parts = keep
     .map((p) => {
       const st: PartStyle["style"] = {};
-      for (const key of ["stroke", "width", "dash"] as const) if (p.style[key] !== undefined && p.style[key] !== o.style[key]) (st as any)[key] = p.style[key];
+      for (const key of ["stroke", "width", "dash", "mid"] as const) if (p.style[key] !== undefined && (p.style[key] ?? 0) !== (key === "mid" ? (o.style.mid ?? 0) : o.style[key])) (st as any)[key] = p.style[key];
       return { ...p, style: st };
     })
     .filter((p) => Object.keys(p.style).length > 0);

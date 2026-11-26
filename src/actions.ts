@@ -3,13 +3,13 @@ import { call, isElectron } from "./api/client";
 import { clearLabelCache } from "./labels/render";
 import { scalingAbout, rotationAbout, transformObj, translation, unionBox, geomBox, sceneGeomBox, type Box } from "./model/geometry";
 import type { Settings } from "./model/settings";
-import { emptyScene, newId, type Dash, type LabelObj, type Obj, type Style } from "./model/types";
-import { placeLabel } from "./model/labelPlace";
+import { emptyScene, newId, type Anchor, type Dash, type LabelObj, type Obj, type Style } from "./model/types";
+import { placeLabel, spotAt } from "./model/labelPlace";
 import { componentAt, components, componentStyles, withPartStyle } from "./model/parts";
 import { sceneToPicture, sceneToTikz, tikzToScene } from "./tikz/export";
 import { cancelDraft, lastPick, selectionBox } from "./tools/controller";
 import { askChoice, askText, store, TRUE_ZOOM, type ToolName } from "./store";
-import { labelBox } from "./labels/render";
+import { labelBox, labelInkSize, nodePointForInk } from "./labels/render";
 import { followRef } from "./smartLabels";
 import { freshCopies, nextNumbered } from "./model/copies";
 import { withAttached } from "./model/attach";
@@ -127,7 +127,18 @@ function addCopies(objs: Obj[], m: ReturnType<typeof translation>, count = false
   return copies;
 }
 
+/** ⌘V: centred on the mouse (moved by whole grid steps, so what was on the
+ *  grid stays on it); with the mouse off the drawing, just beside the original. */
 export function paste() {
+  const { cursor, settings } = store.get();
+  const shapes = clipboard.filter((o) => o.type !== "label");
+  const b = boxOfAll(shapes.length ? shapes : clipboard);
+  if (cursor && b) {
+    const g = settings.gridSize > 0 ? settings.gridSize : 0.25;
+    const step = (v: number) => Math.round(v / g) * g;
+    addCopies(clipboard, translation(step(cursor.x - (b.minX + b.maxX) / 2), step(cursor.y - (b.minY + b.maxY) / 2)));
+    return;
+  }
   pasteObjs(clipboard, pasteOffset());
 }
 
@@ -460,6 +471,7 @@ export function smartLabel() {
   // Near where the object was clicked (e.g. the edge of a square).
   const near = targets.length === 1 && lastPick?.id === targets[0].id ? lastPick.p : undefined;
   const { p, anchor } = placeLabel(targets, others, est, labelBox, [], near);
+  const ref = followRef(targets)!;
   const o: LabelObj = {
     id: newId(),
     type: "label",
@@ -470,10 +482,30 @@ export function smartLabel() {
     anchor,
     font: font as LabelObj["font"],
     attach: targets.map((t) => t.id),
-    follow: { ids: targets.map((t) => t.id), ref: followRef(targets)!, avoid: true },
+    follow: { ids: targets.map((t) => t.id), ref, avoid: true, home: { x: (near ?? p).x - ref.x, y: (near ?? p).y - ref.y } },
   };
   setTool("select");
   store.commit({ ...s.scene, objects: [...s.scene.objects, o] }, { selection: [o.id], editingLabel: o.id });
+}
+
+/** The selected label's place: a side or corner of what it labels (the 3×3
+ *  grid; "center" on top of it), or null to let it find the best spot again. */
+export function setLabelPosition(at: Anchor | null) {
+  const s = store.get();
+  const out: LabelObj[] = [];
+  for (const o of store.selected()) {
+    if (o.type !== "label" || !o.follow) continue;
+    const targets = s.scene.objects.filter((x) => o.follow!.ids.includes(x.id));
+    const ref = followRef(targets);
+    const size = labelInkSize(o);
+    if (!ref || !targets.length) continue;
+    const { p, anchor } = at ? spotAt(targets, at) : placeLabel(targets, s.scene.objects, size ?? { w: 0.3, h: 0.3 }, labelBox, [o.id]);
+    const q = size ? nodePointForInk(o, p, anchor) : p;
+    const follow = { ...o.follow, ref, off: undefined, custom: undefined, at: at ?? undefined, home: { x: p.x - ref.x, y: p.y - ref.y } };
+    out.push({ ...o, p: q, anchor, follow });
+  }
+  if (!out.length) return store.flash("Select a label made with Label (⇧T)");
+  store.commit(store.withReplaced(out));
 }
 
 /** Hide the selection (left out of the TikZ, faint here), or show it again. */

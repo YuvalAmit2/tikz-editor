@@ -926,3 +926,21 @@ button {
 .tab:not(:hover):not(.active) .tab-close:not(.dirty) { visibility: hidden; }
 .tab-new { -webkit-app-region: no-drag; align-self: center; width: 24px; height: 24px; margin-left: 2px; border: 0; border-radius: 5px; background: transparent; color: #6b7280; font-size: 17px; line-height: 22px; cursor: pointer; }
 .tab-new:hover { background: rgba(0, 0, 0, 0.07); }
+
+/* Label position: a 3×3 grid of small squares beside "Auto". */
+.label-position { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+.pos-grid { display: grid; grid-template-columns: repeat(3, 18px); gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 6px; background: var(--chrome); }
+.pos-grid button { width: 18px; height: 18px; padding: 0; border: none; border-radius: 3px; background: transparent; display: grid; place-items: center; cursor: pointer; }
+.pos-grid button span { width: 6px; height: 6px; border-radius: 50%; background: #b9bfc8; }
+.pos-grid button:nth-child(5) span { width: 8px; height: 8px; border-radius: 2px; }
+.pos-grid button:hover { background: var(--accent-soft); }
+.pos-grid button.active span { background: var(--accent); }
+.pos-side { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.pos-side .text-btn.active { color: var(--accent); font-weight: 600; }
+
+/* Sides of a regular polygon: − n + and a few common counts. */
+.sides { display: flex; align-items: center; gap: 4px; }
+.sides .text-btn { width: 22px; padding: 2px 0; font-size: 14px; }
+.sides-n { min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
+.sides-quick { margin-left: auto; }
+.sides-quick button { min-width: 24px; }

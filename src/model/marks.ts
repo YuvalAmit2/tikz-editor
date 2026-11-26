@@ -5,6 +5,7 @@
 import { sampleCurve } from "./curve";
 import { ellipsePoint } from "./geometry";
 import type { Obj, Vec } from "./types";
+import { componentAt, components, componentStyles } from "./parts";
 
 export interface Mark {
   /** Where the arrow's tip is. */
@@ -58,11 +59,10 @@ export function midMarks(o: Obj): { at: number; mark: Mark }[] {
     return [];
   }
   if (o.type === "ellipse") {
-    // TikZ's ellipse starts at angle 0 and runs anticlockwise, so halfway is
-    // at angle 180°, heading down (a circle is written without its rotation).
-    const e = Math.abs(o.rx - o.ry) < 1e-9 ? { ...o, rot: 0 } : o;
-    const p = ellipsePoint(e, Math.PI);
-    const q = ellipsePoint(e, Math.PI + 1e-4);
+    // Halfway round from its starting point (angle 0, which turns with it),
+    // running anticlockwise.
+    const p = ellipsePoint(o, Math.PI);
+    const q = ellipsePoint(o, Math.PI + 1e-4);
     return [{ at: 0.5, mark: { p, dir: unit({ x: q.x - p.x, y: q.y - p.y }) } }];
   }
   return [];
@@ -71,23 +71,57 @@ export function midMarks(o: Obj): { at: number; mark: Mark }[] {
 /** The marks to draw: style.mid is how many arrowheads (1 or 2), negative
  *  for pointing back along the line. */
 export function marksOf(o: Obj): Mark[] {
-  const m = o.style.mid ?? 0;
-  if (!m || !o.style.stroke) return [];
-  const s = Math.sign(m);
-  return midMarks(o).map(({ mark }) => ({ p: mark.p, dir: { x: mark.dir.x * s, y: mark.dir.y * s } }));
+  return styledMarks(o);
+}
+
+export interface StyledMark extends Mark {
+  /** Arrowheads (1 or 2; the sign is already in dir). */
+  heads: number;
+  stroke: string;
+  width: number;
+}
+
+/** Each mark with its own look: a side of a line or polygon picked out
+ *  (double-click it) can have its own arrows and colour. */
+export function styledMarks(o: Obj): StyledMark[] {
+  const st = o.style;
+  const make = (mark: Mark, mid: number, stroke: string | null, width: number): StyledMark[] => {
+    if (!mid || !stroke) return [];
+    const s = Math.sign(mid);
+    return [{ p: mark.p, dir: { x: mark.dir.x * s, y: mark.dir.y * s }, heads: Math.min(2, Math.abs(mid)), stroke, width }];
+  };
+  if (o.type === "path" && o.parts?.length) {
+    const { chain, comps } = components(o, []);
+    if (chain) {
+      const n = chain.pieces.length;
+      const styles = componentStyles(o, comps, n);
+      const pts = o.closed ? [...o.pts, o.pts[0]] : o.pts;
+      const out: StyledMark[] = [];
+      let side = 0;
+      for (const { mark } of midMarks(o)) {
+        // Which side this mark is on (sides of no length have none).
+        while (side + 1 < pts.length && Math.hypot(pts[side + 1].x - pts[side].x, pts[side + 1].y - pts[side].y) <= 1e-9) side++;
+        const k = componentAt(comps, side + 0.5, n);
+        const ps = k >= 0 ? styles[k] : st;
+        out.push(...make(mark, ps.mid ?? 0, ps.stroke, ps.width));
+        side++;
+      }
+      return out;
+    }
+  }
+  return midMarks(o).flatMap(({ mark }) => make(mark, st.mid ?? 0, st.stroke, st.width));
 }
 
 /** The arrows in the middle as TikZ: each a short stroke along the line
  *  ending in an arrowhead at the mark (no decorations library: those fail
  *  on small curved paths when a figure is scaled down). */
 export function marksTikz(o: Obj, fmt: (n: number) => string): string | null {
-  const m = o.style.mid ?? 0;
-  const st = o.style;
-  if (!m || !st.stroke) return null;
-  const opts = [st.stroke === "black" ? "draw" : `draw=${st.stroke}`];
-  if (Math.abs(st.width - 0.4) > 1e-9) opts.push(`line width=${fmt(st.width)}pt`);
-  opts.push(Math.abs(m) >= 2 ? "->>" : "->");
   const c = (p: Vec) => `(${fmt(p.x)},${fmt(p.y)})`;
-  const lines = marksOf(o).map(({ p, dir }) => `\\path[${opts.join(",")}] ${c({ x: p.x - dir.x * 0.05, y: p.y - dir.y * 0.05 })} -- ${c(p)};`);
+  const lines = styledMarks(o).map(({ p, dir, heads, stroke, width }) => {
+    const opts = [stroke === "black" ? "draw" : `draw=${stroke}`];
+    if (Math.abs(width - 0.4) > 1e-9) opts.push(`line width=${fmt(width)}pt`);
+    opts.push(heads >= 2 ? "->>" : "->");
+    return `\\path[${opts.join(",")}] ${c({ x: p.x - dir.x * 0.05, y: p.y - dir.y * 0.05 })} -- ${c(p)};`;
+  });
   return lines.length ? lines.join("\n") : null;
 }

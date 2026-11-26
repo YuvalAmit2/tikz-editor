@@ -1,17 +1,42 @@
-import { applyProps, applyStyle, deleteSelection, groupSelection, saveSettings, smartLabel, toggleHidden, ungroupSelection } from "../actions";
+import { applyProps, applyStyle, deleteSelection, setLabelPosition, groupSelection, saveSettings, smartLabel, toggleHidden, ungroupSelection } from "../actions";
 import { ColorPicker } from "./ColorPicker";
 import { followRef } from "../smartLabels";
 import { geomBox } from "../model/geometry";
 import { toChain } from "../model/trim";
 import { saveSelectionToLibrary } from "../library";
 import { useState } from "react";
-import { FONT_SIZES, LINE_WIDTHS, PATTERNS, type Dash, type Obj, type Pattern, type Style } from "../model/types";
+import { FONT_SIZES, LINE_WIDTHS, PATTERNS, type Anchor, type Dash, type Obj, type Pattern, type Style } from "../model/types";
 import { WAVES } from "../model/wave";
+import { withSides } from "../model/ticks";
 import { componentAt, componentPieces, components, componentStyles, piecesSvgD } from "../model/parts";
 import { PALETTE, TINTS, isCustomColor, splitTint, xcolorCss } from "../model/xcolor";
 import { askText, store, useStore } from "../store";
 
 const withTint = (base: string, tint: number) => (tint >= 100 || isCustomColor(base) ? base : `${base}!${tint}`);
+
+const GRID: Anchor[] = ["north west", "north", "north east", "west", "center", "east", "south west", "south", "south east"];
+
+/** Where a label sits around what it labels: a 3×3 grid (the middle is on
+ *  top of it), or Auto (the best spot clear of lines). */
+function LabelPosition({ at }: { at: Anchor | "custom" | null }) {
+  return (
+    <div className="label-position">
+      <div className="pos-grid" data-testid="label-pos">
+        {GRID.map((a) => (
+          <button key={a} className={at === a ? "active" : ""} title={a === "center" ? "On top of it" : `To the ${a}`} onClick={() => setLabelPosition(a)} data-testid={`label-pos-${a.replace(" ", "-")}`}>
+            <span />
+          </button>
+        ))}
+      </div>
+      <div className="pos-side">
+        <button className={"text-btn" + (at === null ? " active" : "")} title="The best spot near it, clear of lines" onClick={() => setLabelPosition(null)} data-testid="label-pos-auto">
+          Auto
+        </button>
+        <span className="muted small">{at === "custom" ? "Placed by hand" : at === null ? "Finds a clear spot" : ""}</span>
+      </div>
+    </div>
+  );
+}
 
 /** A shortcut written on a button (when Settings shows them). */
 function K({ k }: { k: string }) {
@@ -181,6 +206,8 @@ export function StylePanel() {
   const hasFillable = objs.length === 0 || objs.some((o) => ((o.type === "path" || o.type === "curve") && (o.closed || !!o.style.fill)) || o.type === "ellipse");
   const labels = objs.filter((o): o is Extract<Obj, { type: "label" }> => o.type === "label");
   const points = objs.filter((o): o is Extract<Obj, { type: "point" }> => o.type === "point");
+  const regulars = objs.filter((o): o is Extract<Obj, { type: "path" }> => o.type === "path" && !!o.regular);
+  const ngonSides = useStore((s) => s.ngonSides);
   const [fillBase, fillTint] = splitTint(st.fill);
   const curves = objs.filter((o) => o.type === "curve").length;
   const showControls = useStore((s) => s.showControls);
@@ -249,10 +276,10 @@ export function StylePanel() {
         </section>
       )}
 
-      {hasLine && !onlyLabels && !onlyPoints && !pieceMode && (
+      {hasLine && !onlyLabels && !onlyPoints && (!pieceMode || objs[0].type === "path") && (
         <section>
           <h4>Arrows</h4>
-          {hasOpen && (
+          {hasOpen && !pieceMode && (
             <Seg
               value={`${st.arrowStart ? "<" : ""}-${st.arrowEnd ? ">" : ""}`}
               onPick={(v) => applyStyle({ arrowStart: v.startsWith("<"), arrowEnd: v.endsWith(">") })}
@@ -280,9 +307,16 @@ export function StylePanel() {
         </section>
       )}
 
+      {((objs.length === 0 && tool === "ngon") || regulars.length > 0) && (
+        <section>
+          <h4>Sides</h4>
+          <Sides n={regulars.length ? regulars[0].pts.length : ngonSides} />
+        </section>
+      )}
+
       {points.length > 0 && (
         <section>
-          <h4>Dot size</h4>
+          <h4>{points.every((p) => p.look === "tick") ? "Dash size" : "Dot size"}</h4>
           <Seg value={points[0].size} onPick={(size) => applyProps({ size } as Partial<Obj>, (o) => o.type === "point")} options={[1, 1.5, 2, 3].map((v) => ({ v, label: `${v}pt` }))} />
         </section>
       )}
@@ -333,6 +367,7 @@ export function StylePanel() {
             />
             <span>Keeps clear of lines</span>
           </label>
+          <LabelPosition at={labels[0].follow.custom ? "custom" : (labels[0].follow.at ?? null)} />
         </section>
       )}
 
@@ -498,9 +533,35 @@ function SketchOptions() {
   );
 }
 
+const NGON_NAMES: Record<number, string> = { 3: "triangle", 4: "square", 5: "pentagon", 6: "hexagon", 7: "heptagon", 8: "octagon", 9: "nonagon", 10: "decagon", 12: "dodecagon" };
+
+/** Sides of a regular polygon: the selected ones (redrawn with that many,
+ *  same middle, size and turn) or the next one drawn. */
+function Sides({ n }: { n: number }) {
+  const set = (k: number) => {
+    const m = Math.max(3, Math.min(24, k));
+    store.set({ ngonSides: m });
+    const sel = store.selected().filter((o) => o.type === "path" && o.regular) as Extract<Obj, { type: "path" }>[];
+    if (sel.length) store.commit(store.withReplaced(sel.map((o) => withSides(o, m))));
+  };
+  return (
+    <div className="sides">
+      <button className="text-btn" onClick={() => set(n - 1)} disabled={n <= 3} data-testid="sides-less">−</button>
+      <span className="sides-n" data-testid="sides">{n}</span>
+      <button className="text-btn" onClick={() => set(n + 1)} disabled={n >= 24} data-testid="sides-more">+</button>
+      <div className="seg sides-quick">
+        {[3, 4, 5, 6, 8].map((k) => (
+          <button key={k} className={k === n ? "active" : ""} onClick={() => set(k)} data-testid={`sides-${k}`}>{k}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function objTitle(o: Obj): string {
   switch (o.type) {
     case "path":
+      if (o.regular && o.closed) return `Regular ${NGON_NAMES[o.pts.length] ?? `${o.pts.length}-gon`}`;
       return o.closed ? (o.pts.length === 4 ? "Quadrilateral" : o.pts.length === 3 ? "Triangle" : "Polygon") : o.pts.length === 2 ? "Line" : "Polyline";
     case "curve":
       return o.closed ? "Closed curve" : "Curve";

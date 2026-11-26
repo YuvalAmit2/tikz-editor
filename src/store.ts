@@ -6,7 +6,11 @@ import type { SnapResult } from "./model/snap";
 import type { Guide } from "./model/guides";
 import { DEFAULT_STYLE, emptyScene, newId, type Obj, type Scene, type Style } from "./model/types";
 
-export type ToolName = "select" | "line" | "polyline" | "curve" | "sketch" | "rect" | "circle" | "ellipse" | "fill" | "point" | "text" | "trim";
+export type ToolName = "select" | "line" | "polyline" | "curve" | "sketch" | "rect" | "ngon" | "circle" | "ellipse" | "fill" | "point" | "text" | "trim";
+
+/** What the Point tool puts down: a dot, an upright or flat dash, or a dash
+ *  across the line it is on. */
+export type PointLook = "dot" | "vtick" | "htick" | "normal";
 
 export interface View {
   /** World point (cm) at the centre of the canvas. */
@@ -71,6 +75,11 @@ export interface AppState {
   lineKind: "line" | "brace";
   /** The Line tool's menu is open. */
   lineMenu: boolean;
+  /** What the Point tool draws, and its menu. */
+  pointLook: PointLook;
+  pointMenu: boolean;
+  /** Sides of the next regular polygon. */
+  ngonSides: number;
   /** Open figures (tabs), in order; the active one is in the fields above. */
   tabs: string[];
   activeTab: string;
@@ -128,6 +137,9 @@ class Store {
     snapMenu: false,
     lineKind: "line",
     lineMenu: false,
+    pointLook: "dot",
+    pointMenu: false,
+    ngonSides: 6,
     tabs: ["t0"],
     activeTab: "t0",
     choice: null,

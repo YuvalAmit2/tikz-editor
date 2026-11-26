@@ -51,7 +51,7 @@ On a line of its own a figure is centred. Sizes scale the drawing only; labels k
 | | |
 |---|---|
 | Space (tap) or V | Select |
-| L P B S R E D T F X | Line (its menu, the arrow beside it: line or curly brace), Polyline, Curve, Sketch, Rectangle, Ellipse (⇧: circle), Dot, Text, Fill (paint bucket), Trim |
+| L P B S R N E D T F X | Line (its menu, the arrow beside it: line or curly brace), Polyline, Curve, Sketch, Rectangle, Regular polygon (drag from the middle to a corner; ⇧: sitting on a side; sides in the style panel), Ellipse (⇧: circle), Dot (its menu: a dot, an upright or flat dash, or a dash across the line it's on), Text, Fill (paint bucket), Trim |
 | - . _ | Dashed, dotted (again: solid), solid (also takes a wave off) |
 | G | Grid snapping on/off |
 | ⇧T | Label the selection (placed next to it, clear of other lines; next to the edge or the part of a line you clicked) |
@@ -60,17 +60,17 @@ On a line of its own a figure is centred. Sizes scale the drawing only; labels k
 | Shift (while drawing) | 15° angles, squares, circles |
 | Alt (while drawing) | No snapping |
 | Click / double-click a label | Select it (to move it) / edit its text |
-| Double-click a shape | Edit its points |
+| Double-click a shape | Edit its points. On a side of a line or polygon, that side is also picked out: its colour, dash and arrows change on their own (it still moves with the rest); click elsewhere or Esc for the whole shape again |
 | …while editing points | ↵: add a point at the dot shown on the line under the mouse; double-click an anchor: smooth ↔ corner; ⌫: delete the last clicked point; Alt-drag a handle: move it alone; ⇧-drag: the mirror-image point moves too |
 | Selection box | Corners and edges scale (⇧: about the centre, ⌘: keep proportions); the knob above rotates (⇧: 15° steps). A corner or edge handle on one of a curve's points is a circle: dragging it moves just that point (snapping onto other objects); the rest of the curve stays |
 | While drawing a curve or polyline | ⌘Z takes back the last click, ⌫ drops the whole thing |
 | Right-click | Menu: front/back, forward/backward, Show height (two crossing lines), label, copy, duplicate, flip, library, delete |
 | ⇧H ⇧V ⇧R | Flip horizontally / vertically, rotate 90° |
 | Arrow keys | Nudge by about 15 screen px in grid steps (finer when zoomed in; Shift: four, Alt: a fifth) |
-| ⌘Z ⇧⌘Z ⌘C ⌘V ⌘D ⌘A | Undo, redo, copy, paste, duplicate, select all. ⌘D on a copy you just moved repeats the move (⌘D, drag, ⌘D ⌘D … for evenly spaced copies), and counts subscripts up (a_1, a_2, …) |
+| ⌘Z ⇧⌘Z ⌘C ⌘V ⌘D ⌘A | Undo, redo, copy, paste (at the mouse, in whole grid steps), duplicate, select all. ⌘D on a copy you just moved repeats the move (⌘D, drag, ⌘D ⌘D … for evenly spaced copies), and counts subscripts up (a_1, a_2, …) |
 | ⌘] ⌘[ | Bring to front, send to back |
 | ⌘G, ⇧⌘G | Group, ungroup (grouped objects are selected and moved together) |
-| ⇧⌘H | Hide or show (hidden objects are faint here and left out of the TikZ; on a curve with text, only its line hides) |
+| ⇧⌘H | Hide or show (hidden objects are faint here and left out of the TikZ; on a curve with text, only its line hides, and isn't shown here unless the curve is selected) |
 | ⌘K | Command palette (every command and library figure) |
 | ⌘S ⌘O ⌘, | Save, open (in a new tab), settings |
 | ⌘T (⌘N) ⌘W ⌃Tab | New tab, close tab (asks to save), next tab (⌃⇧Tab: previous) |
@@ -88,11 +88,11 @@ In the text panel: labels are **math by default** (`\cO_K`), but a label contain
 
 **Paint bucket (F):** click inside a region bounded by any lines to fill it. Shapes inside it are left as holes (a ring between two circles, a disc with punctures); loops in one curve and shapes that touch count too.
 
-**Pieces:** to style part of a shape (e.g. the hidden half of a sphere's equator dashed), select it and open **Pieces** in the style panel. It lists the stretches between where other lines cross it, each drawn as a small picture; hovering one highlights it. Pick one or more, and the stroke colour, thickness and dash (including the `-` and `.` keys) apply to just those. **whole** goes back to styling the whole shape. A styled piece follows the crossings when things move, and stays a piece if the line that cut it is deleted.
+**Pieces:** the quickest way is to double-click a side of a line or polygon (each side is a piece of its own). Otherwise, to style part of a shape (e.g. the hidden half of a sphere's equator dashed), select it and open **Pieces** in the style panel. It lists the stretches between where other lines cross it, each drawn as a small picture; hovering one highlights it. Pick one or more, and the stroke colour, thickness and dash (including the `-` and `.` keys) apply to just those (on a line or polygon, the arrows in the middle too). **whole** goes back to styling the whole shape. A styled piece follows the crossings when things move, and stays a piece if the line that cut it is deleted.
 
 **Copy** gives a `tikzpicture` you can paste straight into a document. To keep editing a figure, save it as a `.tikz` file and insert it with `\tikzfig{name}` instead (the command palette also copies the `.tikz` contents or the `\tikzfig` line).
 
-**Labels made with the Label button** (⇧T) stay with what they label, and are deleted, copied and duplicated with it. Text made with the Text tool is centred on the point you clicked. A label's outline fits its visible text, and labels are placed, picked and lined up by that box (the TikZ node keeps its usual padding, so the PDF is unchanged). In the style panel, "Keeps clear of lines" decides whether they find a new spot when it moves or just move along with it.
+**Labels made with the Label button** (⇧T) stay with what they label, and are deleted, copied and duplicated with it. Text made with the Text tool is centred on the point you clicked. A label's outline fits its visible text, and labels are placed, picked and lined up by that box (the TikZ node keeps its usual padding, so the PDF is unchanged). After every change they find their spot again, as near where they were first put as they can be clear of lines, so a label pushed aside (say by a pasted copy) comes back once the way is clear. One you move by hand stays where you put it and just moves with its object. In the style panel, "Keeps clear of lines" turns this off, and a 3×3 grid puts the label at a side or corner of what it labels (the middle: on top of it); **Auto** lets it find its own spot again.
 
 **Text along a curve:** select an open curve and type into "Text along the curve" in the style panel; the curve is replaced by the text (TikZ's `decorations.text`, which `tikzfig.sty` loads; pasted pictures need `\usetikzlibrary{decorations.text}`).
 

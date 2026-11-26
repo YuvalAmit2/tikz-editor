@@ -1,7 +1,7 @@
 // Smart labels are placed with a guessed size when created; once the label
 // has been typed and compiled, it's placed again with its real size (once).
 import { getLabel, labelBox, labelInkSize, labelStore, nodePointForInk } from "./labels/render";
-import { labelCrossesLines, placeLabel } from "./model/labelPlace";
+import { labelCrossesLines, placeLabel, spotAt } from "./model/labelPlace";
 import type { LabelObj, Obj, Scene, Vec } from "./model/types";
 import { store } from "./store";
 
@@ -31,7 +31,10 @@ function update() {
       continue;
     }
     // Near where it was first put (by the side of the object that was clicked).
-    const { p, anchor } = placeLabel(targets, s.scene.objects, labelInkSize(o)!, labelBox, [o.id], centreOf(o));
+    const ref = followRef(targets);
+    const home = rest.follow?.home;
+    const near = home && ref ? { x: ref.x + home.x, y: ref.y + home.y } : centreOf(o);
+    const { p, anchor } = rest.follow?.at ? spotAt(targets, rest.follow.at) : placeLabel(targets, s.scene.objects, labelInkSize(o)!, labelBox, [o.id], near);
     done.push({ ...rest, p: nodePointForInk(o, p, anchor), anchor });
   }
   // Not an undo step of its own: part of creating the label.
@@ -71,18 +74,48 @@ export function followLabels(scene: Scene, prev: Scene | null, final: boolean): 
     const targets = scene.objects.filter((x) => o.follow!.ids.includes(x.id));
     const ref = followRef(targets);
     if (!ref) continue;
-    const d = { x: ref.x - o.follow.ref.x, y: ref.y - o.follow.ref.y };
-    const moved = Math.hypot(d.x, d.y) > 1e-9;
-    let next: LabelObj = moved ? { ...o, p: { x: o.p.x + d.x, y: o.p.y + d.y }, follow: { ...o.follow, ref } } : o;
     const old = before.get(o.id) as LabelObj | undefined;
-    // Moved by hand: it moved by something other than what its objects did.
-    const byHand = !!old?.follow && Math.hypot(o.p.x - old.p.x - (o.follow.ref.x - old.follow.ref.x), o.p.y - old.p.y - (o.follow.ref.y - old.follow.ref.y)) > 1e-9;
+    // Moved by hand: the label itself moved (it carries where its objects
+    // were, `ref`, along when it's moved) while its objects stayed put, or
+    // its place changed some other way. From then on it stays where it was
+    // put (relative to its objects). Not when its place was just chosen (the
+    // grid, Auto). Drags are previewed from the scene before the drag, so
+    // this compares the label's own data, not how far things moved.
+    const sameHome = (a?: Vec, b?: Vec) => (!a && !b) || (!!a && !!b && Math.hypot(a.x - b.x, a.y - b.y) < 1e-9);
+    const chosen = !!old?.follow && (old.follow.at !== o.follow.at || !sameHome(old.follow.home, o.follow.home) || old.follow.custom !== o.follow.custom);
+    let byHand = false;
+    if (old?.follow && !chosen) {
+      const refBefore = followRef(prev!.objects.filter((x) => o.follow!.ids.includes(x.id)));
+      const objectsStill = !!refBefore && Math.hypot(ref.x - refBefore.x, ref.y - refBefore.y) < 1e-9;
+      const carried = { x: o.follow.ref.x - old.follow.ref.x, y: o.follow.ref.y - old.follow.ref.y };
+      const moved = { x: o.p.x - old.p.x, y: o.p.y - old.p.y };
+      byHand = (objectsStill && Math.hypot(carried.x, carried.y) > 1e-9) || Math.hypot(moved.x - carried.x, moved.y - carried.y) > 1e-9;
+    }
+    // Otherwise it goes along with its objects.
+    const d = byHand ? { x: 0, y: 0 } : { x: ref.x - o.follow.ref.x, y: ref.y - o.follow.ref.y };
+    let next: LabelObj = o;
+    if (Math.hypot(d.x, d.y) > 1e-9) next = { ...next, p: { x: o.p.x + d.x, y: o.p.y + d.y } };
+    if (Math.hypot(ref.x - o.follow.ref.x, ref.y - o.follow.ref.y) > 1e-9) next = { ...next, follow: { ...o.follow, ref } };
+    if (byHand && final && !o.follow.custom) next = { ...next, follow: { ...next.follow!, custom: true, at: undefined } };
     const size = labelInkSize(o);
-    if (final && o.follow.avoid && size && !o.attach && !byHand) {
-      const b = labelBox(next);
-      if (b && labelCrossesLines(b, scene.objects, [o.id])) {
-        const { p, anchor } = placeLabel(targets, scene.objects, size, labelBox, [o.id], centreOf(next));
-        next = { ...next, p: nodePointForInk(o, p, anchor), anchor };
+    const f = next.follow!;
+    if (f.at && size && !byHand) {
+      // A side or corner chosen from the grid.
+      const { p, anchor } = spotAt(targets, f.at);
+      next = withSpot(next, o, p, anchor);
+    } else if (final && f.avoid && size && !o.attach && !byHand && !f.custom) {
+      // Placed again after every change, as near its home as it can be
+      // clear of lines (so a label pushed aside comes back). An older label
+      // with no home yet only moves when something crosses it.
+      const crossing = () => {
+        const b = labelBox(next);
+        return !!b && labelCrossesLines(b, scene.objects, [o.id]);
+      };
+      if (f.home || crossing()) {
+        const home = f.home ?? sub(centreOf(o), o.follow.ref);
+        const { p, anchor } = placeLabel(targets, scene.objects, size, labelBox, [o.id], { x: ref.x + home.x, y: ref.y + home.y });
+        next = withSpot(next, o, p, anchor);
+        if (!f.home) next = { ...next, follow: { ...next.follow!, home } };
       }
     }
     if (next !== o) (changed ??= []).push(next);
@@ -105,6 +138,15 @@ export function initSmartLabels() {
   });
 }
 let lastEditing: string | null = null;
+
+const sub = (a: Vec, b: Vec): Vec => ({ x: a.x - b.x, y: a.y - b.y });
+
+/** The label with its text at p (anchored there), if that's a change. */
+function withSpot(next: LabelObj, o: LabelObj, p: Vec, anchor: LabelObj["anchor"]): LabelObj {
+  const q = nodePointForInk(o, p, anchor);
+  if (Math.hypot(q.x - next.p.x, q.y - next.p.y) < 1e-9 && anchor === next.anchor) return next;
+  return { ...next, p: q, anchor };
+}
 
 /** The middle of a label's text (its anchor point before it's compiled). */
 function centreOf(o: LabelObj): Vec {
